@@ -12,7 +12,7 @@ from mobile_v3.utils.call_mobile_agent_e import GUIOwlWrapper # 假设这个 Wra
 
 # --- VLM 配置 ---
 VLM_API_KEY = "" 
-VLM_BASE_URL = "http://localhost:6006" 
+VLM_BASE_URL = "http://region-9.autodl.pro:50134" 
 VLM_MODEL = "iic/GUI-Owl-7B"
 
 # --- 任务和图片 ---
