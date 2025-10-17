@@ -171,6 +171,74 @@ async def test_real_vlm_single_cycle():
     print(f"\n--- 集成测试 {TASK_ID} 完成 ---")
     print(f"**验证结果:** Client 动作请求次数为 {a2a_client_stub.action_counter}。")
     
+@pytest.mark.asyncio
+async def test_concurrent_task_execution(num_tasks: int = 10, max_steps: int = 5):
+    """
+    测试高并发场景：同时启动多个 Mobile Agent 任务。
+    
+    目标: 验证 Python A2A Server (L1) 在 AsyncIO 下的任务隔离和稳定性。
+    """
+    
+    # 真实 VLM/Mock Client 配置
+    executor = MobileAgentTaskExecutor(
+        api_key=REAL_VLM_API_KEY, 
+        base_url=REAL_VLM_BASE_URL, 
+        model=REAL_VLM_MODEL,
+    )
+    INSTRUCTION = "打开抖音。"
+    
+    tasks = []
+    task_ids = range(4001, 4001 + num_tasks) # 从 4001 开始分配 Task ID
+    
+    print(f"\n--- 启动 {num_tasks} 个并发任务 ---")
+    
+    async def run_single_concurrent_task(task_id):
+        """定义单个任务的执行和断言逻辑"""
+        # 确保每个任务都有独立的 Logger 和 A2A Stub
+        task_logger = logging.getLogger(f'Test_{task_id}')
+        a2a_client_stub = A2AClientStub(task_id, task_logger)
+
+        try:
+            await executor.execute_task(
+                task_id=task_id,
+                instruction=INSTRUCTION,
+                initial_screenshot_b64=MOCK_SCREENSHOT_1_B64, 
+                if_notetaker=True, 
+                max_step=max_steps,
+                a2a_interface_mock=a2a_client_stub 
+            )
+            
+            # 关键断言：任务必须完成，且外部动作请求次数正确
+            assert a2a_client_stub.action_counter == 1, f"Task {task_id}: 外部动作请求次数应为 1。"
+            return "SUCCESS"
+        
+        except Exception as e:
+            task_logger.error(f"Task {task_id}: 致命错误 - {e}")
+            return f"FAILURE: {e}"
+
+    # 使用 asyncio.gather 并发运行所有任务
+    results = await asyncio.gather(*[run_single_concurrent_task(tid) for tid in task_ids], return_exceptions=True)
+
+    # 4. 最终断言和报告
+    failures = [r for r in results if r != "SUCCESS"]
+    success_count = len(results) - len(failures)
+    
+    print("\n================== 并发测试结果总结 ==================")
+    print(f"总任务数: {num_tasks}")
+    print(f"成功完成: {success_count} / {num_tasks}")
+    print(f"失败任务数: {len(failures)}")
+    
+    if failures:
+        print("\n--- 失败详情 ---")
+        for fail_result in failures:
+            print(f"- {fail_result}")
+            
+    assert success_count == num_tasks, f"预期所有任务成功，实际失败 {len(failures)} 个。"
+
+@pytest.mark.asyncio
+async def test_concurrency_level_10():
+    await test_concurrent_task_execution(num_tasks=10)
+    
 # @pytest.mark.asyncio
 # async def test_failed_action_and_replan():
 #     """测试动作失败 (Reflector Outcome C) 导致 Manager 重新规划的流程。"""
