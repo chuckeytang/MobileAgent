@@ -185,6 +185,7 @@ class VLMStub:
 
         current_call = self.call_counter
         response = self.script[current_call]
+        MIN_B64_LENGTH = 1000
         
         # Step 1 (Manager M1) 和 Step 2 (Executor E1) 只接收初始截图
         if current_call in [0, 1]: 
@@ -197,15 +198,15 @@ class VLMStub:
             assert len(image_inputs) == 2, f"Call {current_call}: Reflector 预期接收 2 张截图。"
             # 我们可以更进一步，检查第二张图是否是 Client 返回的图
             # 由于 Client 返回的 Base64 字符串很大，我们只检查起始部分
-            assert isinstance(image_inputs[0], str) and len(image_inputs[0]) > 100, f"Call {current_call}: 第一张图格式错误/为空。"
-            assert isinstance(image_inputs[1], str) and len(image_inputs[1]) > 100, f"Call {current_call}: 第二张图格式错误/为空。"
+            assert isinstance(image_inputs[0], str) and len(image_inputs[0]) > MIN_B64_LENGTH, f"Call {current_call}: R1 动作前截图数据为空或格式错误。"
+            assert isinstance(image_inputs[1], str) and len(image_inputs[1]) > MIN_B64_LENGTH, f"Call {current_call}: R1 动作后截图数据为空或格式错误。"
             
         # Step 4 (Notetaker N1) 和 Step 5 (Manager M2) 接收动作后截图
         elif current_call in [3, 4]:
             # 预期: [MOCK_SCREENSHOT_2_B64]
             assert len(image_inputs) == 1, f"Call {current_call}: Notetaker/Manager M2 预期只接收 1 张截图。"
             # 检查收到的截图是否是 Client 返回的第二张图
-            assert image_inputs[0].startswith("data:image/png;base64,"), f"Call {current_call}: Manager M2 接收的截图格式错误。"
+            assert isinstance(image_inputs[0], str) and len(image_inputs[0]) > MIN_B64_LENGTH, f"Call {current_call}: E2 接收的截图数据为空或格式错误。"
             
         self.call_counter += 1
         return response, None, True
