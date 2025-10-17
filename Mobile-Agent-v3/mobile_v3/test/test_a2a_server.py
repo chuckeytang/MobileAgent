@@ -23,6 +23,7 @@ from mobile_v3.a2a_server.mobile_agent_a2a import MobileAgentTaskExecutor
 
 # 导入 Mock 辅助组件
 from mobile_v3.a2a_server.a2a_mock import (
+    MOCK_IMAGES_CASE2,
     VLMStub, 
     A2AClientStub, 
     MOCK_SCREENSHOT_1_B64, 
@@ -36,8 +37,10 @@ from mobile_v3.a2a_server.a2a_mock import (
     EXECUTOR_ACTION_MOCK_2
 )
 
-# 配置一个临时的 Logger，用于测试时输出到控制台
-# 注意：正式运行时，日志隔离由 a2a_utils.setup_task_logger 处理
+def get_b64_from_mock(n: int) -> str:
+    """从 Case 2 字典中获取 Base64 截图 (用于初始状态)"""
+    return MOCK_IMAGES_CASE2.get(n, "PLACEHOLDER_B64")
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 
@@ -238,6 +241,56 @@ async def test_concurrent_task_execution(num_tasks: int = 10, max_steps: int = 5
 @pytest.mark.asyncio
 async def test_concurrency_level_10():
     await test_concurrent_task_execution(num_tasks=10)
+    
+@pytest.mark.asyncio
+async def test_real_complex_task():
+    """
+    集成测试 (真实 VLM): 使用真实 VLM 模型和模拟的 15 步截图序列。
+    
+    流程: Agent 必须在 14 个动作中正确推理出打开、搜索、点击、评论的序列，
+          最终在第 15 张图后推理出 Answer 动作。
+    """
+    TASK_ID = 5000
+    INSTRUCTION = "在抖音中搜索一家理发店并发表评论。"
+    MAX_STEPS = 20 # 允许足够多的步数来完成复杂任务
+
+    # 1. 实例化真实的 VLM Executor (使用真实的配置)
+    executor = MobileAgentTaskExecutor(
+        api_key=REAL_VLM_API_KEY, 
+        base_url=REAL_VLM_BASE_URL, 
+        model=REAL_VLM_MODEL,
+        # NOTICE: vlm_wrapper 参数被省略，使用真实的 self.vlm
+    )
+
+    # 2. 实例化 Client I/O Mock (使用 14 步序列)
+    # Client Stub 会自动加载并使用 14 步脚本 (返回图2到图15)
+    a2a_client_stub = A2AClientStub(TASK_ID, logging.getLogger(f'Test_{TASK_ID}'))
+
+    # 3. 执行任务
+    print(f"\n--- 启动真实 VLM 任务 {TASK_ID}：{INSTRUCTION} ---")
+    
+    await executor.execute_task(
+        task_id=TASK_ID,
+        instruction=INSTRUCTION,
+        # 初始截图是第一张图 (1.jpg)
+        initial_screenshot_b64=get_b64_from_mock(1), 
+        if_notetaker=True, 
+        max_step=MAX_STEPS,
+        a2a_interface_mock=a2a_client_stub 
+    )
+
+    # 4. 最终断言检查 (验证 Agent 是否成功完成所有步骤)
+    expected_actions = 14 # 假设任务需要 14 个外部动作才能到达最终状态
+    
+    print("\n================== 任务结果断言 ==================")
+    print(f"实际动作数: {a2a_client_stub.action_counter}")
+    
+    # 任务成功的判断标准：Agent 必须执行了所有 14 个模拟动作，并且最终推理出 Answer 动作
+    assert a2a_client_stub.action_counter == expected_actions, f"外部动作执行次数错误，预期 {expected_actions} 次，实际 {a2a_client_stub.action_counter} 次。"
+    
+    # NOTE: 如果任务成功完成，日志中应有 'Task finished by Executor with: answer.'
+    
+    print(f"\n--- 真实 VLM 集成测试 {TASK_ID} 完成 ---")
     
 # @pytest.mark.asyncio
 # async def test_failed_action_and_replan():

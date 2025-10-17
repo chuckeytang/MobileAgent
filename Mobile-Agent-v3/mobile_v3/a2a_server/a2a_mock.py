@@ -7,11 +7,23 @@ import logging
 import os
 from PIL import Image
 import asyncio
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Optional, Tuple
 
-# --- 测试图片准备 ---
-# 假设 1.jpg 是初始屏幕 (桌面)
-# 假设 2.jpg 是抖音启动后的屏幕 (内容流)
+# 加载所有图片，返回一个字典 {1: b64_str, 2: b64_str, ...}
+def load_all_case2_images(case_name: str = "case2", num_images: int = 15) -> Dict[int, str]:
+    """加载指定测试用例的所有截图并转换为 Base64。"""
+    images = {}
+    # 假设 test/case2/ 位于项目根目录下
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'test', case_name))
+    for i in range(1, num_images + 1):
+        path = os.path.join(base_dir, f"{i}.jpg")
+        if os.path.exists(path):
+            # 注意：返回纯 Base64 字符串
+            images[i] = load_image_b64(path) 
+        else:
+            images[i] = "PLACEHOLDER_B64"
+            print(f"Warning: Missing image file: {path}. Using placeholder.")
+    return images
 
 def load_image_b64(path: str) -> str:
     """加载图片并转换为 Base64 字符串"""
@@ -20,10 +32,26 @@ def load_image_b64(path: str) -> str:
         return "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYGD4DwAADgAEEhAAaAAAAABJRU5ErkJggg=="
     with open(path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
+    
+# 预加载所有图片
+MOCK_IMAGES_CASE2 = load_all_case2_images(case_name="case2", num_images=15)
 
 # 预加载测试图片
 MOCK_SCREENSHOT_1_B64 = load_image_b64("test/case1/1.jpg") # 初始桌面
 MOCK_SCREENSHOT_2_B64 = load_image_b64("test/case1/2.jpg") # 抖音启动后
+
+def get_complex_client_script() -> List[Dict[str, Any]]:
+    """为复杂任务生成 Client Stub 的回复序列。"""
+    script = []
+    # 共有 14 个外部动作 (Action 1 到 Action 14) 导致图片变化
+    for i in range(1, 15):
+        # Action i 发生后，Client 回复下一张图片 (i+1)
+        script.append({
+            "screenshot_b64": MOCK_IMAGES_CASE2.get(i + 1, "MISSING"), 
+            "width": 1080, "height": 1920,
+            "note": f"Action {i} executed. Replied with image {i+1}.jpg."
+        })
+    return script
 
 class A2AClientStub:
     """
@@ -31,39 +59,13 @@ class A2AClientStub:
     它模拟了 Client 接收动作请求 -> 执行 ADB -> 返回截图的过程。
     """
     
-    def __init__(self, task_id: int, logger: logging.Logger):
+    def __init__(self, task_id: int, logger: logging.Logger, mock_script: Optional[List[Dict[str, Any]]] = None):
         self.task_id = task_id
         self.logger = logger
         self.action_counter = 0
 
-        # 定义一个简单的执行脚本，用于返回截图数据
-        # 脚本: [初始截图, 动作1后截图, 动作2后截图, ...]
-        self.mock_script: List[Dict[str, Any]] = [
-            # 初始状态：Client 应该在 execute_task 函数外部提供初始截图
-            # 动作 1：模拟点击 '抖音' 图标
-            {
-                "screenshot_b64": MOCK_SCREENSHOT_2_B64, 
-                "width": 1080, "height": 1920,
-                "note": "Client executed: click 抖音. Screenshot 2 returned."
-            },
-            # 动作 2：模拟点击 '关注' 按钮 (假设下一个动作)
-            {
-                "screenshot_b64": MOCK_SCREENSHOT_2_B64, 
-                "width": 1080, "height": 1920,
-                "note": "Client executed: click 关注. Screenshot 2 (no change) returned."
-            },
-            # 动作 3：模拟 swipe down (假设下一个动作)
-            {
-                "screenshot_b64": MOCK_SCREENSHOT_2_B64, 
-                "width": 1080, "height": 1920,
-                "note": "Client executed: swipe down. Screenshot 2 returned again."
-            },
-            # ... 您可以根据需要添加更多步骤 ...
-        ]
-
-    # ----------------------------------------------------------------------
-    # 核心 Mock 接口 (模拟 A2A Server 调用的接口)
-    # ----------------------------------------------------------------------
+        # 如果传入了 mock_script，则使用它；否则使用旧的默认脚本 (兼容 case1)
+        self.mock_script: List[Dict[str, Any]] = mock_script if mock_script is not None else get_complex_client_script()
 
     async def push_event(self, event: Dict[str, Any]):
         """
