@@ -10,7 +10,7 @@ from PIL import Image
 from typing import Dict, Any, Tuple, Optional
 
 # 导入 V3 核心组件
-from utils.mobile_agent_e import (
+from mobile_v3.utils.mobile_agent_e import (
     InfoPool, 
     Manager, 
     Executor, 
@@ -119,7 +119,7 @@ class MobileAgentTaskExecutor:
             info_pool.completed_plan = parsed_result_planning['completed_subgoal']
             info_pool.plan = parsed_result_planning['plan']
 
-            task_logger.info(f"MANAGER THOUGHT: {parsed_result_planning['thought'][:100]}...")
+            task_logger.info(f"MANAGER THOUGHT: {parsed_result_planning['thought'][:1000]}...")
             task_logger.info(f"MANAGER PLAN: {info_pool.plan}")
             
             await a2a_interface.push_event(create_a2a_event("manager_plan", task_id, {
@@ -148,7 +148,7 @@ class MobileAgentTaskExecutor:
                 # 处理错误并继续循环...
                 continue
 
-            task_logger.info(f"EXECUTOR THOUGHT: {action_thought[:100]}...")
+            task_logger.info(f"EXECUTOR THOUGHT: {action_thought[:1000]}...")
             # 使用 json.dumps 确保 JSON 打印清晰，并截断长字符串
             task_logger.info(f"EXECUTOR ACTION JSON: {action_object_str}")
             

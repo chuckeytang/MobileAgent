@@ -6,7 +6,7 @@ import argparse
 from PIL import Image
 from datetime import datetime
 
-from utils.mobile_agent_e import (
+from mobile_v3.utils.mobile_agent_e import (
     InfoPool, 
     Manager, 
     Executor, 
