@@ -111,7 +111,9 @@ class MobileAgentTaskExecutor:
             
             # --- Manager ---
             prompt_planning = manager.get_prompt(info_pool)
-            # 假设 VLM Wrapper 支持 Base64 输入
+            image_id_manager = f"step_{step+1}_before_action"
+            task_logger.info(f"VLM CALL (Manager): Using image ID: {image_id_manager}")
+            
             output_planning, _, _ = await self.vllm.predict_mm(
                 prompt_planning, [current_screenshot_b64] 
             )
@@ -119,7 +121,7 @@ class MobileAgentTaskExecutor:
             info_pool.completed_plan = parsed_result_planning['completed_subgoal']
             info_pool.plan = parsed_result_planning['plan']
 
-            task_logger.info(f"MANAGER THOUGHT: {parsed_result_planning['thought'][:1000]}...")
+            task_logger.info(f"MANAGER THOUGHT: {parsed_result_planning['thought']}...")
             task_logger.info(f"MANAGER PLAN: {info_pool.plan}")
             
             await a2a_interface.push_event(create_a2a_event("manager_plan", task_id, {
@@ -133,6 +135,9 @@ class MobileAgentTaskExecutor:
             
             # --- Executor ---
             prompt_action = executor.get_prompt(info_pool)
+            image_id_executor = f"step_{step+1}_before_action"
+            task_logger.info(f"VLM CALL (Executor): Using image ID: {image_id_executor}")
+
             output_action, _, _ = await self.vllm.predict_mm(
                 prompt_action, [current_screenshot_b64]
             )
@@ -148,7 +153,7 @@ class MobileAgentTaskExecutor:
                 # 处理错误并继续循环...
                 continue
 
-            task_logger.info(f"EXECUTOR THOUGHT: {action_thought[:1000]}...")
+            task_logger.info(f"EXECUTOR THOUGHT: {action_thought}...")
             # 使用 json.dumps 确保 JSON 打印清晰，并截断长字符串
             task_logger.info(f"EXECUTOR ACTION JSON: {action_object_str}")
             
@@ -192,6 +197,10 @@ class MobileAgentTaskExecutor:
             
             # --- Reflector ---
             prompt_action_reflect = action_reflector.get_prompt(info_pool)
+            image_id_reflector_before = f"step_{step+1}_before_action"
+            image_id_reflector_after = f"step_{step+1}_after_action"
+            task_logger.info(f"VLM CALL (Reflector): Using image IDs: [{image_id_reflector_before}, {image_id_reflector_after}]")
+
             output_action_reflect, _, _ = await self.vllm.predict_mm(
                 prompt_action_reflect,
                 [current_screenshot_b64, screenshot_after_b64], # 动作前后两张截图
@@ -217,6 +226,9 @@ class MobileAgentTaskExecutor:
             # --- Notetaker (如果成功且启用) ---
             if action_outcome == "A" and if_notetaker:
                 prompt_note = notetaker.get_prompt(info_pool)
+                image_id_notetaker = f"step_{step+1}_after_action"
+                task_logger.info(f"VLM CALL (Notetaker): Using image ID: {image_id_notetaker}")
+                
                 output_note, _, _ = await self.vllm.predict_mm(
                     prompt_note, [screenshot_after_b64]
                 )
