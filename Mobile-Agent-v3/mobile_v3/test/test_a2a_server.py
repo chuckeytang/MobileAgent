@@ -13,6 +13,11 @@ from unittest.mock import patch, AsyncMock
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# --- 真实的 VLM 配置 (请替换为您的实际值) ---
+REAL_VLM_API_KEY = ""
+REAL_VLM_BASE_URL = "http://localhost:6006/v1" 
+REAL_VLM_MODEL = "iic/GUI-Owl-7B"
+
 # 导入 A2A Server 核心执行器
 from mobile_v3.a2a_server.mobile_agent_a2a import MobileAgentTaskExecutor 
 
@@ -110,10 +115,62 @@ async def test_successful_app_launch_cycle():
     print(f"\n--- 单元测试 {TASK_ID} 成功完成 ---")
     print(f"**验证结果:** VLM 调用次数正确 ({vlm_stub.call_counter} 次), 外部动作请求次数正确 ({a2a_client_stub.action_counter} 次)。")
 
-# ----------------------------------------------------------------------
-# 更多测试用例 (可选，用于验证错误和重试逻辑)
-# ----------------------------------------------------------------------
+@pytest.mark.asyncio
+async def test_real_vlm_single_cycle():
+    """
+    集成测试：使用真实的 VLM 模型，验证 Agent 流程的实际推理能力。
+    
+    流程:
+    1. Agent (真实VLM) 规划 (图1) -> 预期: Click 动作
+    2. Client Stub 执行 Click -> 返回 图2
+    3. Agent (真实VLM) 反思 (图1/图2) -> 预期: Outcome A
+    4. Agent (真实VLM) 再次规划 (图2) -> 预期: Answer 动作
+    5. 任务终止 (Answer)
+    """
+    TASK_ID = 3001
+    INSTRUCTION = "打开抖音。"
+    MAX_STEPS = 5
 
+    # 1. 实例化真实的 VLM Executor
+    executor = MobileAgentTaskExecutor(
+        api_key=REAL_VLM_API_KEY, 
+        base_url=REAL_VLM_BASE_URL, 
+        model=REAL_VLM_MODEL,
+        # 不注入 vlm_wrapper，使用真实的 GUIOwlWrapper
+    )
+
+    # 2. 保持 Client I/O 的 Mock
+    a2a_client_stub = A2AClientStub(TASK_ID, logging.getLogger(f'Test_{TASK_ID}'))
+    
+    # 3. 执行任务
+    print(f"\n--- 启动任务 {TASK_ID}，连接真实 VLM ---")
+    
+    await executor.execute_task(
+        task_id=TASK_ID,
+        instruction=INSTRUCTION,
+        # Node.js Client 提供的初始 Base64 截图
+        initial_screenshot_b64=MOCK_SCREENSHOT_1_B64, 
+        if_notetaker=True, 
+        max_step=MAX_STEPS,
+        a2a_interface_mock=a2a_client_stub # 保持 Client I/O Mock
+    )
+
+    # 4. 断言检查 (预期 VLM 行为)
+    
+    # 4.1 预期 VLM 至少调用 4 次 (M1, E1, R1, M2/E2)
+    # 由于无法直接访问 vlm_wrapper.call_counter，我们必须依赖日志或 Client Stub 的行为
+    
+    # 在这个集成测试中，我们依赖于 Client Stub 被请求了 1 次外部动作 (Click)
+    # 并且任务成功终止 (Final Answer Event)
+    
+    assert a2a_client_stub.action_counter == 1, "Client Stub 应该只被请求了 1 次外部动作 (Click)，以确保 Agent 成功推理出 Answer。"
+    
+    # NOTE: 实际断言应检查最终 A2A Event Stream 中是否包含 'final_answer' 事件，
+    # 但此处我们依赖 action_counter 来确认 Click 动作已发生且 Answer 动作未被错误请求。
+    
+    print(f"\n--- 集成测试 {TASK_ID} 完成 ---")
+    print(f"**验证结果:** Client 动作请求次数为 {a2a_client_stub.action_counter}。")
+    
 # @pytest.mark.asyncio
 # async def test_failed_action_and_replan():
 #     """测试动作失败 (Reflector Outcome C) 导致 Manager 重新规划的流程。"""

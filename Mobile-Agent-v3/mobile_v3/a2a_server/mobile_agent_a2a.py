@@ -22,7 +22,6 @@ from utils.mobile_agent_e import (
 from utils.call_mobile_agent_e import GUIOwlWrapper
 from .a2a_utils import setup_task_logger, create_action_request_event, create_a2a_event
 
-
 # 假设 A2A SDK 提供了以下抽象接口 (您需要在实际项目中集成 A2A SDK)
 class A2AInterfaceMock:
     """模拟 A2A Server SDK 提供的事件推送和消息等待接口"""
