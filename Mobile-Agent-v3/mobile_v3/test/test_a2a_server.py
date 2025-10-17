@@ -1,5 +1,6 @@
 # mobile_v3/test/test_a2a_server.py
 
+from mobile_v3.a2a_server import a2a_mock
 import pytest
 import asyncio
 import logging
@@ -19,7 +20,7 @@ REAL_VLM_BASE_URL = "http://localhost:6006/v1"
 REAL_VLM_MODEL = "iic/GUI-Owl-7B"
 
 # 导入 A2A Server 核心执行器
-from mobile_v3.a2a_server.mobile_agent_a2a import MobileAgentTaskExecutor 
+from mobile_v3.a2a_server.mobile_agent_a2a import MobileAgentTaskExecutor, get_action_reply_future, A2AInterfaceReal
 
 # 导入 Mock 辅助组件
 from mobile_v3.a2a_server.a2a_mock import (
@@ -291,6 +292,71 @@ async def test_real_complex_task():
     # NOTE: 如果任务成功完成，日志中应有 'Task finished by Executor with: answer.'
     
     print(f"\n--- 真实 VLM 集成测试 {TASK_ID} 完成 ---")
+
+@pytest.mark.asyncio
+async def test_real_complex_task_async_stream():
+    """
+    集成测试：使用真实 VLM 和异步流式响应模式 (A2AInterfaceReal)。
+    目标: 验证 L1 Agent 在 Future 阻塞/解除阻塞下的决策流程。
+    """
+    TASK_ID = 5001
+    INSTRUCTION = "在抖音中搜索一家理发店并发表评论。"
+    MAX_STEPS = 20 
+    
+    # 1. 实例化 VLM Executor (使用真实的配置)
+    executor = MobileAgentTaskExecutor(
+        api_key=REAL_VLM_API_KEY, 
+        base_url=REAL_VLM_BASE_URL, 
+        model=REAL_VLM_MODEL,
+    )
+    
+    # 2. 实例化 Fake L2 Client (事件接收器和回复器)
+    task_logger = logging.getLogger(f'Test_{TASK_ID}')
+    # 使用复杂任务的回复脚本
+    reply_script = a2a_mock.get_complex_client_script() 
+    fake_l2_client = a2a_mock.A2AEventSink(TASK_ID, task_logger, reply_script)
+    
+    # 3. 启动 L1 Agent 任务和 Fake L2 Client 事件循环
+    
+    # 任务 A: 启动 L1 Agent 任务
+    l1_task_coro = executor.execute_task_a2a_mode(
+        task_id=TASK_ID,
+        instruction=INSTRUCTION,
+        initial_screenshot_b64=a2a_mock.get_b64_from_mock(1), 
+        event_queue=fake_l2_client.event_queue, # 关键：将队列传入 L1 Agent
+        api_key=REAL_VLM_API_KEY, base_url=REAL_VLM_BASE_URL, model=REAL_VLM_MODEL,
+        if_notetaker=True, 
+        max_step=MAX_STEPS,
+    )
+
+    # 任务 B: 启动 Fake L2 Client 事件循环
+    l2_loop_coro = fake_l2_client.run_event_loop()
+
+    # 4. 并发执行
+    task_l1 = asyncio.create_task(l1_task_coro)
+    task_l2 = asyncio.create_task(l2_loop_coro)
+    
+    # 等待两个任务完成 (L1 Agent 完成或失败，L2 Loop 随后终止)
+    await asyncio.gather(task_l1, task_l2) 
+    
+    # 5. 最终断言检查
+    
+    # 5.1 检查 L1 Agent 是否正确执行了所有外部动作
+    expected_actions = 14 
+    assert fake_l2_client.reply_counter == expected_actions, f"外部动作回复次数错误，预期 {expected_actions} 次，实际 {fake_l2_client.reply_counter} 次。"
+
+    # 5.2 检查事件流的完整性
+    final_events = fake_l2_client.received_events
+    finalized_event = next((e for e in final_events if e['type'] == 'task_finalized'), None)
+    
+    assert finalized_event is not None, "事件流中缺少 task_finalized 最终事件。"
+    assert finalized_event['data']['status'] == 'success', "L1 Agent 任务最终状态不是 'success'。"
+    
+    # 5.3 检查事件顺序和数量
+    # 预期事件数量 (M/E/R/N 各 14 轮) + Final + 初始事件
+    expected_event_types = ['manager_plan', 'action_request', 'action_reflection', 'important_notes'] * 14
+    
+    print("\n--- 异步流式集成测试成功完成 ---")
     
 # @pytest.mark.asyncio
 # async def test_failed_action_and_replan():

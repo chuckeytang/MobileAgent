@@ -8,6 +8,8 @@ import os
 from PIL import Image
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
+from mobile_v3.a2a_server.mobile_agent_a2a import A2AInterfaceBase 
+from mobile_v3.a2a_server.mobile_agent_a2a import ACTION_REPLY_FUTURES
 
 # 加载所有图片，返回一个字典 {1: b64_str, 2: b64_str, ...}
 def load_all_case2_images(case_name: str = "case2", num_images: int = 15) -> Dict[int, str]:
@@ -53,14 +55,74 @@ def get_complex_client_script() -> List[Dict[str, Any]]:
         })
     return script
 
-class A2AClientStub:
+class A2AEventSink:
+    """
+    模拟 L2 Node.js 客户端的事件接收器和回复器。
+    它接收 L1 Agent 的事件流 (通过 Queue)，并处理其中的动作请求。
+    """
+    def __init__(self, task_id: int, mock_reply_script: List[Dict[str, Any]]):
+        self.task_id = task_id
+        self.mock_reply_script = mock_reply_script
+        self.reply_counter = 0
+        self.received_events: List[Dict[str, Any]] = []
+        # L1 Agent 会将事件推送到这个队列
+        self.event_queue = asyncio.Queue() 
+
+    async def run_event_loop(self):
+        """
+        异步地从队列中读取事件，并在收到 action_request 时，
+        将回复推送到 L1 Agent 的 Future 中。
+        """
+        while True:
+            try:
+                # 设置超时，防止无限阻塞
+                event = await asyncio.wait_for(self.event_queue.get(), timeout=120) 
+            except asyncio.TimeoutError:
+                break # 如果 120 秒没有新事件，则任务可能已完成或出错
+            
+            self.received_events.append(event)
+            
+            if event.get('type') == 'action_request':
+                if self.reply_counter >= len(self.mock_reply_script):
+                    # 模拟脚本耗尽，等待 L1 Agent 达到 Max Step 结束
+                    continue 
+
+                # 1. 获取 L1 Agent 正在等待的 Future
+                # 注意：L1 Agent 必须在推送 'action_request' 之前创建好 Future
+                reply_future = ACTION_REPLY_FUTURES.get(self.task_id)
+                
+                if not reply_future or reply_future.done():
+                    # 致命错误：L1 Agent 没有在等待
+                    raise Exception(f"Task {self.task_id} received action request but Future not found/ready.")
+
+                # 2. 获取并处理 Mock 回复
+                reply_data = self.mock_reply_script[self.reply_counter]
+                self.reply_counter += 1
+                
+                # 3. 模拟 L2 通过 HTTP POST /reply 接口回复
+                # ❗ 关键：设置 Future 的结果，解除 L1 Agent 内部的阻塞 ❗
+                reply = {
+                    "type": "action_reply",
+                    "screenshot_b64": reply_data["screenshot_b64"],
+                    "screenshot_width": reply_data["width"],
+                    "screenshot_height": reply_data["height"],
+                    "note": reply_data["note"] # 仅用于日志
+                }
+
+                reply_future.set_result(reply)
+                self.logger.info(f"[Fake L2 Reply] Replied to Future. Action count: {self.reply_counter}")
+
+            if event.get('type') == 'task_finalized':
+                break
+            
+class A2AClientStub(A2AInterfaceBase):
     """
     Mock A2A Client 的行为，用于单元测试 Python A2A Server 的执行循环。
     它模拟了 Client 接收动作请求 -> 执行 ADB -> 返回截图的过程。
     """
     
     def __init__(self, task_id: int, logger: logging.Logger, mock_script: Optional[List[Dict[str, Any]]] = None):
-        self.task_id = task_id
+        super().__init__(task_id)
         self.logger = logger
         self.action_counter = 0
 
