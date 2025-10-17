@@ -20,7 +20,7 @@ VLM_MODEL = "iic/GUI-Owl-7B"
 
 # --- 任务和图片 ---
 TASK_INSTRUCTION = "打开抖音。"
-IMAGE_PATH = "case1/1.jpg" # 初始截图 (手机桌面)
+IMAGE_PATH = "test/case1/1.jpg" # 初始截图 (手机桌面)
 
 def pil_to_base64(image):
     """将 PIL 图像转换为 Base64 字符串"""

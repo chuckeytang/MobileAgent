@@ -22,8 +22,8 @@ def load_image_b64(path: str) -> str:
         return base64.b64encode(f.read()).decode("utf-8")
 
 # 预加载测试图片
-MOCK_SCREENSHOT_1_B64 = load_image_b64("../../test/case1/1.jpg") # 初始桌面
-MOCK_SCREENSHOT_2_B64 = load_image_b64("../../test/case1/2.jpg") # 抖音启动后
+MOCK_SCREENSHOT_1_B64 = load_image_b64("test/case1/1.jpg") # 初始桌面
+MOCK_SCREENSHOT_2_B64 = load_image_b64("test/case1/2.jpg") # 抖音启动后
 
 class A2AClientStub:
     """
