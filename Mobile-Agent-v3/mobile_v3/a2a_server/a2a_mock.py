@@ -110,13 +110,69 @@ class A2AClientStub:
             "screenshot_height": reply_data["height"],
         }
     
+MANAGER_PLAN_MOCK_1 = """
+### Thought ###
+The user wants to open the Douyin app, which is visible on the home screen...
+### Plan ###
+1. Locate the Douyin app icon on the home screen.
+2. Tap on the Douyin app icon to open it.
+3. Perform the `answer` action.
+"""
+
+EXECUTOR_ACTION_MOCK_1 = """
+### Thought ###
+The user wants to open the Douyin app. The Douyin app icon is visible on the home screen, so the next logical step is to tap on it to open the application.
+### Action ###
+{"action": "click", "coordinate": [792, 1245]}
+### Description ###
+Tap on the Douyin app icon.
+"""
+
+REFLECTOR_OUTCOME_1 = """
+### Outcome ###
+A
+### Error Description ###
+None
+"""
+
+NOTETAKER_NOTES_1 = """
+### Important Notes ###
+Successfully launched the Douyin app. The current screen shows a video playing.
+"""
+
+MANAGER_PLAN_MOCK_2 = """
+### Thought ###
+The previous action successfully opened Douyin. The current task is "打开抖音" and the plan contains "Perform the `answer` action" as the final step. I will execute the answer action now.
+### Historical Operations ###
+1. Locate the Douyin app icon on the home screen. 2. Tap on the Douyin app icon to open it.
+### Plan ###
+1. Perform the `answer` action.
+2. Finished
+"""
+EXECUTOR_ACTION_MOCK_2 = """
+### Thought ###
+The task is complete, I should output the answer action now.
+### Action ###
+{"action": "answer", "text": "抖音已成功打开。"}
+### Description ###
+Report the successful completion of the task.
+"""
+
 class VLMStub:
     """
     Mock VLM Wrapper，用于单元测试 Agent 的决策逻辑。
     """
     def __init__(self, script: List[str]):
         # script 是预设的 VLM 响应列表，按 Manager, Executor, Reflector 的顺序
-        self.script = script
+        self.script: List[str] = [
+            MANAGER_PLAN_MOCK_1,      # Step 1: Manager 规划 (输入图 1)
+            EXECUTOR_ACTION_MOCK_1,   # Step 2: Executor 动作 (输入图 1)
+            REFLECTOR_OUTCOME_1,      # Step 3: Reflector 反思 (输入图 1/2)
+            NOTETAKER_NOTES_1,        # Step 4: Notetaker 记忆 (输入图 2)
+            MANAGER_PLAN_MOCK_2,      # Step 5: Manager 再次规划 (输入图 2)
+            EXECUTOR_ACTION_MOCK_2    # Step 6: Executor 最终回答 (输入图 2)
+            # 总共 6 次 VLM 调用
+        ]
         self.call_counter = 0
 
     async def predict_mm(self, prompt: str, image_inputs: List[Any]) -> Tuple[str, Any, Any]:
