@@ -27,12 +27,6 @@ def image_to_base64(image_path):
     dummy_image = dummy_image.resize((resized_width, resized_height))
     return f"data:image/png;base64,{pil_to_base64(dummy_image)}"
 
-def ensure_b64_url_format(image_b64: str) -> str:
-    """确保 Base64 字符串带有 data:image/... 前缀，以便传给 OpenAI API。"""
-    if image_b64.startswith("data:"):
-        return image_b64
-    return f"data:image/png;base64,{image_b64}"
-
 class LlmWrapper(abc.ABC):
     """Abstract interface for (text only) LLM."""
     @abc.abstractmethod
@@ -97,9 +91,7 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
               if list(item.keys())[0] == 'text':
                   new_content.append({'type': 'text', 'text': item['text']})
               elif list(item.keys())[0] == 'image':
-                image_data = item['image']
-                image_url = ensure_b64_url_format(image_data)
-                new_content.append({'type': 'image_url', 'image_url': {'url': image_url}})
+                new_content.append({'type': 'image_url', 'image_url': {'url': image_to_base64(item['image'])}})
           converted_messages.append({'role': message['role'], 'content': new_content})
 
       return converted_messages
@@ -124,9 +116,9 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
               }
           ]
           
-          for image_b64 in images: # 遍历 Base64 字符串
+          for image in images:
             payload[0]['content'].append({
-                'image': image_b64 # 传递 Base64 字符串
+                'image': image
             })
         else:
           payload = messages
