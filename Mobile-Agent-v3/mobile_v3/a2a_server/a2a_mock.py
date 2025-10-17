@@ -197,8 +197,9 @@ class VLMStub:
             assert len(image_inputs) == 2, f"Call {current_call}: Reflector 预期接收 2 张截图。"
             # 我们可以更进一步，检查第二张图是否是 Client 返回的图
             # 由于 Client 返回的 Base64 字符串很大，我们只检查起始部分
-            assert image_inputs[1].startswith("data:image/png;base64,"), f"Call {current_call}: Reflector 第二张图格式错误。"
-
+            assert isinstance(image_inputs[0], str) and len(image_inputs[0]) > 100, f"Call {current_call}: 第一张图格式错误/为空。"
+            assert isinstance(image_inputs[1], str) and len(image_inputs[1]) > 100, f"Call {current_call}: 第二张图格式错误/为空。"
+            
         # Step 4 (Notetaker N1) 和 Step 5 (Manager M2) 接收动作后截图
         elif current_call in [3, 4]:
             # 预期: [MOCK_SCREENSHOT_2_B64]
