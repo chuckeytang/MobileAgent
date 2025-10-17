@@ -147,7 +147,6 @@ The previous action successfully opened Douyin. The current task is "打开抖�
 1. Locate the Douyin app icon on the home screen. 2. Tap on the Douyin app icon to open it.
 ### Plan ###
 1. Perform the `answer` action.
-2. Finished
 """
 EXECUTOR_ACTION_MOCK_2 = """
 ### Thought ###
