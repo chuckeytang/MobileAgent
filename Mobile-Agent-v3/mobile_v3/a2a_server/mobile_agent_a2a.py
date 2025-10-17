@@ -60,10 +60,6 @@ class MobileAgentTaskExecutor:
         else:
             self.vllm = GUIOwlWrapper(api_key, base_url, model)
 
-    # ---------------------------------------------------------------------
-    # 核心执行方法：替代 run_instruction
-    # ---------------------------------------------------------------------
-
     async def execute_task(
         self, 
         task_id: int, 
@@ -153,9 +149,21 @@ class MobileAgentTaskExecutor:
             # -----------------------------------------------------
             # III. 动作请求 (替换本地 Controller.py)
             # -----------------------------------------------------
+            action_type = action_object.get('action')
+            if action_type == "answer":
+                task_logger.info(f"Task finished by Executor with: answer.")
+                
+                # 1. 推送 Answer 事件给 Client (用于前端显示最终答案)
+                await a2a_interface.push_event(create_a2a_event("final_answer", task_id, {
+                    "text": action_object.get("text", "Task completed."),
+                    "status": action_object.get("status", "success")
+                }))
+                
+                # 2. 直接退出整个循环，不需要 Client 执行 ADB 或回复截图
+                break # 退出 for step in range(max_step): 循环
             
             # 1. 向 Client 推送动作请求并阻塞
-            task_logger.info(f"Pushing action request: {action_object['action']}")
+            task_logger.info(f"Pushing action request: {action_type}")
             await a2a_interface.push_event(
                 create_action_request_event(task_id, action_object_str, action_thought)
             )
