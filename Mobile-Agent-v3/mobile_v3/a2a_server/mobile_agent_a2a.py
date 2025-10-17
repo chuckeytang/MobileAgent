@@ -118,6 +118,9 @@ class MobileAgentTaskExecutor:
             parsed_result_planning = manager.parse_response(output_planning)
             info_pool.completed_plan = parsed_result_planning['completed_subgoal']
             info_pool.plan = parsed_result_planning['plan']
+
+            task_logger.info(f"MANAGER THOUGHT: {parsed_result_planning['thought'][:100]}...")
+            task_logger.info(f"MANAGER PLAN: {info_pool.plan}")
             
             await a2a_interface.push_event(create_a2a_event("manager_plan", task_id, {
                 "plan": info_pool.plan,
@@ -144,6 +147,10 @@ class MobileAgentTaskExecutor:
                 task_logger.error(f"Invalid JSON output from Executor: {action_object_str}")
                 # 处理错误并继续循环...
                 continue
+
+            task_logger.info(f"EXECUTOR THOUGHT: {action_thought[:100]}...")
+            # 使用 json.dumps 确保 JSON 打印清晰，并截断长字符串
+            task_logger.info(f"EXECUTOR ACTION JSON: {action_object_str}")
             
             # -----------------------------------------------------
             # III. 动作请求 (替换本地 Controller.py)
@@ -192,6 +199,11 @@ class MobileAgentTaskExecutor:
             
             parsed_result_action_reflect = action_reflector.parse_response(output_action_reflect)
             action_outcome = parsed_result_action_reflect['outcome'] # A/B/C
+            error_description = parsed_result_action_reflect['error_description']
+
+            task_logger.info(f"REFLECTOR OUTCOME: {action_outcome}")
+            if action_outcome in ["B", "C"]:
+                 task_logger.warning(f"REFLECTOR ERROR: {error_description}")
             
             # 更新 InfoPool 状态
             info_pool.action_history.append(action_object)
@@ -211,6 +223,7 @@ class MobileAgentTaskExecutor:
                 parsed_result_note = notetaker.parse_response(output_note)
                 info_pool.important_notes = parsed_result_note['important_notes']
                 
+                task_logger.info(f"NOTETAKER NOTES: {info_pool.important_notes}")
                 await a2a_interface.push_event(create_a2a_event("important_notes", task_id, {
                     "notes": info_pool.important_notes,
                 }))
