@@ -96,13 +96,13 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
 
       return converted_messages
     
-    def predict(
+    async def predict(
             self,
             text_prompt: str,
     ) -> tuple[str, Optional[bool], Any]:
         return self.predict_mm(text_prompt, [])
 
-    def predict_mm(
+    async def predict_mm(
             self, text_prompt: str, images: list[np.ndarray], messages = None
     ) -> tuple[str, Optional[bool], Any]:
         
