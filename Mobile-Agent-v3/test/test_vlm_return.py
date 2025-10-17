@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+import tempfile
 import requests
 import base64
 from PIL import Image
@@ -34,10 +35,16 @@ async def test_agent_vlm_calls():
     """模拟 Manager 和 Executor Agent 的连续 VLM 调用"""
     
     # 1. 准备多模态输入
+    temp_files = [] # 存储临时文件路径
     try:
         image = Image.open(IMAGE_PATH)
-        image_b64 = pil_to_base64(image)
-        image_inputs = [image_b64] 
+        # 将图片保存为临时文件，并将路径传递给 VLM Wrapper
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp_file:
+            image.save(tmp_file.name)
+            temp_files.append(tmp_file.name)
+        
+        # image_inputs 传入的是文件路径列表
+        image_inputs = temp_files
     except FileNotFoundError:
         print(f"错误: 找不到图片文件 {IMAGE_PATH}。请确保文件路径正确。")
         return
@@ -81,6 +88,10 @@ async def test_agent_vlm_calls():
     except Exception as e:
         print(f"\n!!! 致命错误: Manager VLM 调用失败: {e}")
         return
+    finally:
+        # 清理临时文件，无论成功失败都执行
+        for tf in temp_files:
+            os.unlink(tf) # 删除临时文件
         
     # =================================================================
     # B. 第二步：获取 Executor Agent 的 Mock 返回值
