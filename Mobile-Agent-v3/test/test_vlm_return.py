@@ -2,12 +2,14 @@
 
 import json
 import os
+import sys
 import requests
 import base64
 from PIL import Image
 from io import BytesIO
 import asyncio
 from typing import Dict, Any, Tuple, Optional
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # 假设这两个文件在您的环境中可以直接导入
 from mobile_v3.utils.mobile_agent_e import InfoPool, Manager, Executor
