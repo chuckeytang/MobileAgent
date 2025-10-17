@@ -89,10 +89,6 @@ async def test_agent_vlm_calls():
     except Exception as e:
         print(f"\n!!! 致命错误: Manager VLM 调用失败: {e}")
         return
-    finally:
-        # 清理临时文件，无论成功失败都执行
-        for tf in temp_files:
-            os.unlink(tf) # 删除临时文件
         
     # =================================================================
     # B. 第二步：获取 Executor Agent 的 Mock 返回值
@@ -146,6 +142,15 @@ async def test_agent_vlm_calls():
     print(results.get('manager_raw', 'N/A'))
     print("\n2. Executor Mock 值 (用于 Executor Agent):")
     print(results.get('executor_raw', 'N/A'))
+
+    # -----------------------------------------------------------------
+    # D. 统一文件清理 (新增/移动到函数末尾)
+    # -----------------------------------------------------------------
+    for tf in temp_files:
+        try:
+            os.unlink(tf)
+        except Exception as e:
+            print(f"警告: 清理临时文件 {tf} 失败: {e}")
     
 if __name__ == "__main__":
     if not os.path.exists(IMAGE_PATH):
