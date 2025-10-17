@@ -7,7 +7,7 @@ import logging
 import os
 from PIL import Image
 import asyncio
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Tuple
 
 # --- 测试图片准备 ---
 # 假设 1.jpg 是初始屏幕 (桌面)

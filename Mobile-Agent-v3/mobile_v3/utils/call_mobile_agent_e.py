@@ -91,7 +91,13 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
               if list(item.keys())[0] == 'text':
                   new_content.append({'type': 'text', 'text': item['text']})
               elif list(item.keys())[0] == 'image':
-                new_content.append({'type': 'image_url', 'image_url': {'url': image_to_base64(item['image'])}})
+                image_b64 = item['image']
+                image_url = f"data:image/png;base64,{image_b64}"
+                
+                new_content.append({
+                    'type': 'image_url', 
+                    'image_url': {'url': image_url}
+                })
           converted_messages.append({'role': message['role'], 'content': new_content})
 
       return converted_messages
@@ -116,9 +122,9 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
               }
           ]
           
-          for image in images:
+          for image_data in images:
             payload[0]['content'].append({
-                'image': image
+                'image': image_data 
             })
         else:
           payload = messages
