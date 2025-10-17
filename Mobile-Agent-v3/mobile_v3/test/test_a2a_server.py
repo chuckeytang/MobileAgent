@@ -1,5 +1,6 @@
 # mobile_v3/test/test_a2a_server.py
 
+import base64
 import pytest
 import asyncio
 import logging
@@ -20,7 +21,16 @@ REAL_VLM_MODEL = "iic/GUI-Owl-7B"
 
 # 导入 A2A Server 核心执行器
 from mobile_v3.a2a_server.mobile_agent_a2a import MobileAgentTaskExecutor 
+import tempfile 
+from mobile_v3.a2a_server.a2a_mock import load_image_b64, MOCK_SCREENSHOT_1_B64
 
+def b64_to_temp_file(b64_data: str, suffix: str = ".png") -> str:
+    """将 Base64 数据保存为临时文件并返回路径"""
+    img_data = base64.b64decode(b64_data)
+    with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp_file:
+        tmp_file.write(img_data)
+        return tmp_file.name
+    
 # 导入 Mock 辅助组件
 from mobile_v3.a2a_server.a2a_mock import (
     VLMStub, 
@@ -145,15 +155,27 @@ async def test_real_vlm_single_cycle():
     # 3. 执行任务
     print(f"\n--- 启动任务 {TASK_ID}，连接真实 VLM ---")
     
-    await executor.execute_task(
-        task_id=TASK_ID,
-        instruction=INSTRUCTION,
-        # Node.js Client 提供的初始 Base64 截图
-        initial_screenshot_b64=MOCK_SCREENSHOT_1_B64, 
-        if_notetaker=True, 
-        max_step=MAX_STEPS,
-        a2a_interface_mock=a2a_client_stub # 保持 Client I/O Mock
-    )
+    # --- 1. 处理初始截图：将 Base64 转换为 VLM Wrapper 期望的文件路径 ---
+    temp_initial_path = None
+    try:
+        # 将 Base64 截图保存为临时文件
+        temp_initial_path = b64_to_temp_file(MOCK_SCREENSHOT_1_B64) 
+        
+        # 4. 执行任务
+        await executor.execute_task(
+            task_id=TASK_ID,
+            instruction=INSTRUCTION,
+            # 将 Base64 替换为临时文件路径
+            initial_screenshot_b64=temp_initial_path, 
+            if_notetaker=True, 
+            max_step=MAX_STEPS,
+            a2a_interface_mock=a2a_client_stub 
+        )
+
+    finally:
+        # 任务执行完毕后，清理初始截图的临时文件
+        if temp_initial_path and os.path.exists(temp_initial_path):
+            os.unlink(temp_initial_path)
 
     # 4. 断言检查 (预期 VLM 行为)
     
@@ -170,7 +192,7 @@ async def test_real_vlm_single_cycle():
     
     print(f"\n--- 集成测试 {TASK_ID} 完成 ---")
     print(f"**验证结果:** Client 动作请求次数为 {a2a_client_stub.action_counter}。")
-    
+
 # @pytest.mark.asyncio
 # async def test_failed_action_and_replan():
 #     """测试动作失败 (Reflector Outcome C) 导致 Manager 重新规划的流程。"""
