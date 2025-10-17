@@ -53,8 +53,12 @@ class A2AInterfaceMock:
 
 class MobileAgentTaskExecutor:
     
-    def __init__(self, api_key: str, base_url: str, model: str):
-        self.vllm = GUIOwlWrapper(api_key, base_url, model)
+    def __init__(self, api_key: str, base_url: str, model: str, vlm_wrapper: Optional[Any] = None):
+        # 如果提供了 vlm_wrapper (Mock), 则使用它；否则创建真实的 GUIOwlWrapper
+        if vlm_wrapper:
+            self.vllm = vlm_wrapper
+        else:
+            self.vllm = GUIOwlWrapper(api_key, base_url, model)
 
     # ---------------------------------------------------------------------
     # 核心执行方法：替代 run_instruction
@@ -69,12 +73,17 @@ class MobileAgentTaskExecutor:
         max_step: int = 25, 
         coor_type: str = "abs",
         if_notetaker: bool = False,
+        a2a_interface_mock: Optional[Any] = None
     ):
         task_logger = setup_task_logger(task_id)
         task_logger.info(f"Task {task_id} started. Instruction: {instruction}")
         
-        # 实例化 A2A 接口
-        a2a_interface = A2AInterfaceMock(task_id)
+        # --- A2A 接口实例化 (使用注入的 Mock 或默认 Mock) ---
+        if a2a_interface_mock:
+            a2a_interface = a2a_interface_mock
+        else:
+            # 实际部署模式（需替换为真实的 A2A SDK 接口）
+            a2a_interface = A2AInterfaceReal(task_id)
 
         # 初始化 Agent 核心组件 (复用 mobile_agent_e.py)
         info_pool = InfoPool(

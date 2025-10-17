@@ -109,3 +109,29 @@ class A2AClientStub:
             "screenshot_width": reply_data["width"],
             "screenshot_height": reply_data["height"],
         }
+    
+class VLMStub:
+    """
+    Mock VLM Wrapper，用于单元测试 Agent 的决策逻辑。
+    """
+    def __init__(self, script: List[str]):
+        # script 是预设的 VLM 响应列表，按 Manager, Executor, Reflector 的顺序
+        self.script = script
+        self.call_counter = 0
+
+    async def predict_mm(self, prompt: str, image_inputs: List[Any]) -> Tuple[str, Any, Any]:
+        """
+        模拟 VLM 的异步调用。
+        每次调用返回 script 中的下一个预设响应。
+        """
+        if self.call_counter >= len(self.script):
+            return "Finished", None, True # 脚本结束，返回终止信号
+        
+        # 模拟 VLM 推理时间
+        await asyncio.sleep(0.005) 
+        
+        response = self.script[self.call_counter]
+        self.call_counter += 1
+        
+        # 返回 (response_text, message_history, raw_response_flag)
+        return response, None, True
