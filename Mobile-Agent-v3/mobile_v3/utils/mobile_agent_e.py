@@ -153,7 +153,7 @@ class Manager(BaseAgent):
         plan = response.split("### Plan")[-1].replace("\n", " ").replace("  ", " ").replace("###", "").strip()#.split("### Current Subgoal")[0].replace("\n", " ").replace("  ", " ").replace("###", "").strip()
         return {"thought": thought, "completed_subgoal": completed_subgoal,  "plan": plan}#, "current_subgoal": current_subgoal
 
-from utils.new_json_action import *
+from mobile_v3.utils.new_json_action import *
 
 ATOMIC_ACTION_SIGNITURES_noxml = {
     ANSWER: {
