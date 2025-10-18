@@ -119,7 +119,12 @@ async def handle_a2a_rpc_root(request: Request):
     """
     捕获 Node.js SDK 发送到顶级 URL 的 RPC 请求，并根据 method 字段进行分发。
     """
-    raw_body = await request.body()
+    try:
+        raw_body = await request.body()
+    except Exception as e:
+        logger.error(f"Failed to read raw request body: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error while reading request.")
+    
     try:
         rpc_request = json.loads(raw_body)
     except json.JSONDecodeError:
