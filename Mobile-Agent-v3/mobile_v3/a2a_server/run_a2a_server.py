@@ -17,6 +17,7 @@ from .mobile_agent_a2a import MobileAgentTaskExecutor # 待修改
 from .a2a_utils import V3_to_A2A_Event, create_a2a_message_stream_event, create_a2a_status_update
 
 app = FastAPI(title="Mobile-Agent-v3 A2A Server")
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('A2AServer')
 
 # 任务 ID 计数器和任务状态存储
@@ -29,8 +30,43 @@ def get_reply_future(task_id):
         ACTION_REPLY_FUTURES[task_id] = asyncio.Future()
     return ACTION_REPLY_FUTURES[task_id]
 
-# -------------------- A2A 标准端点 --------------------
+class DebugLogMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        
+        # 1. 打印请求路径和方法
+        logger.info(f"[DEBUG LOG] REQUEST START: {request.method} {request.url.path}")
 
+        # 2. 只有在 POST 请求时才尝试读取 Body，并使用 try/except 确保不会崩溃
+        if request.method == "POST":
+            try:
+                # 重新封装一个 Body 副本，以供下游路由（handle_a2a_rpc_root）再次读取
+                # 这是一个标准的 Fast API 模式，用于在中间件中消费 Body
+                request.state.body = await request.body()
+                
+                # 解析并打印 Payload
+                payload = json.loads(request.state.body)
+                logger.info(f"[DEBUG LOG] POST Payload Peek: {payload.get('method')}")
+                logger.debug(f"[DEBUG LOG] Full Payload: {json.dumps(payload, indent=2)}")
+                
+                # 将 body 副本放回流中，供 handle_a2a_rpc_root 再次读取
+                request.scope["body"] = request.state.body
+            except json.JSONDecodeError as e:
+                logger.error(f"[DEBUG LOG] JSON Decode Failed (Middleware). Body: {request.state.body.decode('utf-8')[:100]}...")
+                # ❗ 关键：如果解析失败，直接返回 400 错误，并附带详情 ❗
+                return JSONResponse(
+                    status_code=400, 
+                    content={"detail": "Invalid JSON-RPC Payload format.", "error": str(e)}
+                )
+            except Exception as e:
+                logger.error(f"[DEBUG LOG] Unexpected error reading body: {e}")
+                
+        response = await call_next(request)
+        logger.info(f"[DEBUG LOG] REQUEST END: {response.status_code}")
+        return response
+
+app.add_middleware(DebugLogMiddleware)
+
+# -------------------- A2A 标准端点 --------------------
 @app.get("/.well-known/agent-card.json")
 async def get_agent_card():
     """A2A 协议要求的代理卡片发现端点"""
