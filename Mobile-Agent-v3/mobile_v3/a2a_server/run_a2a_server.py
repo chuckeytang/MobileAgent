@@ -119,22 +119,30 @@ async def handle_a2a_rpc_root(request: Request):
     """
     捕获 Node.js SDK 发送到顶级 URL 的 RPC 请求，并根据 method 字段进行分发。
     """
+    raw_body = await request.body()
     try:
-        rpc_request = await request.json()
+        rpc_request = json.loads(raw_body)
     except json.JSONDecodeError:
+        logger.error(f"Failed to decode JSON. Raw Body: {raw_body.decode('utf-8')[:200]}...")
         raise HTTPException(status_code=400, detail="Invalid JSON format.")
     
     method = rpc_request.get("method")
+    logger.info(f"RPC Method: {method}, Request ID: {rpc_request.get('id')}")
+    logger.debug(f"Full RPC Payload: {json.dumps(rpc_request, indent=2)}")
     
     # 检查是否是流式消息发送请求
     if method == "message/stream":
         params = rpc_request.get("params")
-        if not params or not params.get("message"):
-            raise HTTPException(status_code=400, detail="Missing A2A Message in RPC params.")
+        if not params:
+            logger.error("RPC Payload is missing the 'params' field.")
+            raise HTTPException(status_code=400, detail="RPC Payload is missing 'params' field.")
             
         a2a_message = params.get("message")
         
-        # ❗ 调用流式处理核心逻辑 ❗
+        if not a2a_message:
+            logger.error("RPC Payload 'params' is missing the 'message' field.")
+            raise HTTPException(status_code=400, detail="RPC Payload is missing 'message' field in params.")
+        
         return await _handle_stream_logic(a2a_message)
 
     # 检查是否是 tasks/cancel 请求
