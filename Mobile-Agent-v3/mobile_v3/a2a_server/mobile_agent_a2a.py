@@ -19,7 +19,7 @@ from mobile_v3.utils.mobile_agent_e import (
     INPUT_KNOW
 )
 # 导入 VLM Wrapper 和 A2A 辅助工具
-from utils.call_mobile_agent_e import GUIOwlWrapper
+from ..utils.call_mobile_agent_e import GUIOwlWrapper
 from .a2a_utils import setup_task_logger, create_action_request_event, create_a2a_event
 
 # ---------------------------------------------------------------------
