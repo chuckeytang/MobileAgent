@@ -4,6 +4,7 @@ import os
 import uuid
 import json
 import time
+import re
 import asyncio
 from datetime import datetime
 from PIL import Image
@@ -21,6 +22,12 @@ from mobile_v3.utils.mobile_agent_e import (
 # 导入 VLM Wrapper 和 A2A 辅助工具
 from ..utils.call_mobile_agent_e import GUIOwlWrapper
 from .a2a_utils import setup_task_logger, create_action_request_event, create_a2a_event
+
+def clean_base64(b64_string: str) -> str:
+    """去除 Base64 字符串中的所有空格、换行符和非法字符，以便 VLLM 正确解码。"""
+    # 移除所有空白字符 (空格, 换行, 制表符等)
+    # 使用 re.sub 更加健壮
+    return re.sub(r'\s', '', b64_string).strip()
 
 # ---------------------------------------------------------------------
 # 1. 异步任务回复管理器 (用于解除 L1 任务的阻塞)
@@ -219,8 +226,7 @@ class MobileAgentTaskExecutor:
         action_reflector = ActionReflector()
         
         # 初始状态
-        current_screenshot_b64 = initial_screenshot_b64
-        current_width, current_height = 1080, 1920 # 假设初始截图信息
+        current_screenshot_b64 = clean_base64(initial_screenshot_b64)
         
         for step in range(max_step):
             task_logger.info(f"\n--- STEP {step+1} ---")
@@ -315,9 +321,10 @@ class MobileAgentTaskExecutor:
 
             # 3. 更新执行后的环境状态
             screenshot_after_b64 = reply["screenshot_b64"]
+            cleaned_screenshot_after_b64 = clean_base64(screenshot_after_b64)
             current_width = reply["screenshot_width"]
             current_height = reply["screenshot_height"]
-            current_screenshot_b64 = screenshot_after_b64
+            current_screenshot_b64 = cleaned_screenshot_after_b64
             
             # -----------------------------------------------------
             # IV/V. 反思 (Reflector) 和 记忆 (Notetaker)
@@ -331,7 +338,7 @@ class MobileAgentTaskExecutor:
 
             output_action_reflect, _, _ = await self.vllm.predict_mm(
                 prompt_action_reflect,
-                [current_screenshot_b64, screenshot_after_b64], # 动作前后两张截图
+                [current_screenshot_b64, cleaned_screenshot_after_b64], # 动作前后两张截图
             )
             
             parsed_result_action_reflect = action_reflector.parse_response(output_action_reflect)
@@ -358,7 +365,7 @@ class MobileAgentTaskExecutor:
                 task_logger.info(f"VLM CALL (Notetaker): Using image ID: {image_id_notetaker}")
                 
                 output_note, _, _ = await self.vllm.predict_mm(
-                    prompt_note, [screenshot_after_b64]
+                    prompt_note, [cleaned_screenshot_after_b64]
                 )
                 parsed_result_note = notetaker.parse_response(output_note)
                 info_pool.important_notes = parsed_result_note['important_notes']
@@ -369,7 +376,7 @@ class MobileAgentTaskExecutor:
                 }))
 
             # 准备下一轮：更新当前截图为动作后的截图
-            current_screenshot_b64 = screenshot_after_b64
+            current_screenshot_b64 = cleaned_screenshot_after_b64
 
         task_logger.info(f"Task {task_id} completed.")
         # 推送最终状态
