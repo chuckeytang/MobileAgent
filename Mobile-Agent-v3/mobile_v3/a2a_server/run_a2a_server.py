@@ -93,24 +93,29 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
         raise HTTPException(status_code=400, detail="A2A Message missing 'text' part for instruction.")
     instruction = instruction_part['text']
 
-    screenshot_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'data' and p.get('contentType') == 'image/png'), None)
-    if not screenshot_part:
-        error_detail = "A2A Message missing 'image/png' part for initial screenshot."
+    # 1. 查找 kind == 'file' 的部分
+    screenshot_part_file = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'file'), None)
+    if not screenshot_part_file:
+        error_detail = "A2A Message missing 'file' part for initial screenshot (V3 requires initial image)."
         logger.error(f"STREAM START FAILED: {error_detail}") 
         raise HTTPException(status_code=400, detail=error_detail)
     
+    # 2. 尝试提取 Base64 和 MimeType
     try:
-        initial_screenshot_b64 = screenshot_part['file']['bytes']
+        # 提取 'bytes' 属性
+        initial_screenshot_b64 = screenshot_part_file['file']['bytes']
+        mimetype = screenshot_part_file['file'].get('mimeType') 
     except KeyError:
+        # 如果 FilePart 结构不完整 (如缺少 'file' 或 'bytes')
         error_detail = "A2A Message FilePart is malformed (missing 'file' or 'bytes' field)."
         logger.error(f"STREAM START FAILED: {error_detail}") 
         raise HTTPException(status_code=400, detail=error_detail)
+    
+    # 3. 检查 MIME Type (可选但推荐)
+    if not mimetype or not mimetype.startswith('image/'):
+        logger.warn(f"Received unexpected MIME type: {mimetype}. Continuing with image data.")
 
-    mimetype = screenshot_part['file'].get('mimeType') 
-    if mimetype != 'image/png' and not mimetype.startswith('image/'):
-        logger.warn(f"Received unexpected MIME type: {mimetype}")
-        
-    # 2. 初始化 V3 任务
+    # 4. 初始化 V3 任务
     TASK_COUNTER += 1
     l1_task_id = TASK_COUNTER
     
