@@ -16,7 +16,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- 真实的 VLM 配置 (请替换为您的实际值) ---
 REAL_VLM_API_KEY = ""
-REAL_VLM_BASE_URL = "http://localhost:6006/v1" 
+REAL_VLM_BASE_URL = "http://localhost:6007/v1" 
 REAL_VLM_MODEL = "iic/GUI-Owl-7B"
 
 # 导入 A2A Server 核心执行器

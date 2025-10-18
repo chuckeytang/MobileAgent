@@ -163,7 +163,7 @@ except ImportError:
 
 if __name__ == "__main__":
     VLM_API_KEY = os.environ.get("VLM_API_KEY", "") 
-    VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://localhost:6006/v1")
+    VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://localhost:6007/v1")
     VLM_MODEL = os.environ.get("VLM_MODEL", "iic/GUI-Owl-7B")
     
     logger.info("Starting Mobile-Agent-v3 A2A Server...")
@@ -172,6 +172,6 @@ if __name__ == "__main__":
     uvicorn.run(
         app, 
         host="0.0.0.0", 
-        port=4001, 
+        port=6006, 
         log_level="info"
     )
