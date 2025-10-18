@@ -14,6 +14,7 @@ AGENT_CARD = {
     "description": "An Agent2Agent compliant wrapper for Mobile Agent V3 (GUI-Owl VLM). Executes UI automation tasks on mobile devices.",
     "agentId": "mobile-agent-v3",
     "capabilities": {
+        "streaming": True,
         "messages:sendStream": {
             "description": "Send a Message to initiate a mobile automation task and receive a stream of status updates and artifacts.",
             "type": "StreamingMessage",
