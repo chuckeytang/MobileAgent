@@ -20,6 +20,7 @@ AGENT_CARD = {
             "type": "StreamingMessage",
             "formats": ["text/plain", "image/png"],
             "artifacts": ["image/png", "text/json"], # 支持截图和 JSON 输出
+            "streaming": True
         }
         # A2A 协议通常不直接包含 action_request / action_reply 的自定义接口，
         # 我们将在 messages:sendStream 内部处理动作流。
