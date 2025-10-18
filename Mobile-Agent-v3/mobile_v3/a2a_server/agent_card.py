@@ -26,7 +26,7 @@ AGENT_CARD = {
         # 我们将在 messages:sendStream 内部处理动作流。
     },
     "endpoints": {
-        "messages:sendStream": "/v1/messages:sendStream",
+        "message/stream": "/v1/messages:sendStream",
         "health": "/health"
     }
 }
