@@ -6,7 +6,7 @@ import sys
 import json
 import uuid
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # =========================================================================
 # 1. 任务日志隔离设置
@@ -63,3 +63,84 @@ def create_action_request_event(task_id: int, action_json: str, thought: str) ->
         "wait_for_reply": True,
         "description": "Client must execute this action and reply with new screenshot.",
     })
+
+def create_a2a_status_update(task_id: int, status: str, final: bool = False, error: Optional[str] = None) -> Dict[str, Any]:
+    """
+    创建标准的 A2A 状态更新事件 (kind: 'status-update')。
+    """
+    event = {
+        "kind": "status-update",
+        "timestamp": datetime.now().isoformat(),
+        "id": str(task_id),
+        "status": {
+            "state": status, # 'running', 'completed', 'failed', 'canceled'
+            "final": final
+        }
+    }
+    if error:
+        event["status"]["error"] = error
+    return event
+
+def create_a2a_message_stream_event(a2a_event: Dict[str, Any]) -> str:
+    """
+    将 A2A 事件字典封装为 SSE (Server-Sent Events) 格式。
+    A2A 协议通常使用 'event' 字段包装 JSON 负载。
+    """
+    # 将事件字典转换为 JSON 字符串
+    json_data = json.dumps(a2a_event)
+    
+    # 格式化为 SSE 消息 (data: [JSON])
+    return f"data: {json_data}\n\n"
+
+def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    将 Mobile Agent V3 的内部事件转换为 A2A 标准事件。
+    """
+    v3_type = v3_event.get('type')
+    v3_data = v3_event.get('data')
+
+    # 宏观的 Manager Plan 或 Reflector Outcome，映射为 A2A 消息或状态更新
+    if v3_type == 'manager_plan':
+        # 映射为 A2A 的 'message' 或 'artifact-update'
+        return {
+            "kind": "message",
+            "timestamp": datetime.now().isoformat(),
+            "id": str(task_id),
+            "role": "assistant",
+            "parts": [{
+                "kind": "text",
+                "text": f"Manager Plan: {v3_data.get('plan', '')}"
+            }]
+        }
+    
+    elif v3_type == 'action_request':
+        # 动作请求，通常在 A2A 中也是一个 Message
+        return {
+            "kind": "message",
+            "timestamp": datetime.now().isoformat(),
+            "id": str(task_id),
+            "role": "tool_call",
+            "parts": [{
+                "kind": "text",
+                "text": f"Action Requested: {v3_data}"
+            }]
+        }
+
+    elif v3_type == 'task_finalized':
+        # 任务结束，映射为最终状态更新
+        status = v3_data.get('status', 'completed')
+        return create_a2a_status_update(task_id, status, final=True)
+    
+    # 其他 V3 事件（如 'action_reflection', 'important_notes'）可以根据需要映射或忽略
+
+    # 默认返回原始事件（如果 A2A Client Service 知道如何处理）
+    return {
+        "kind": "message",
+        "timestamp": datetime.now().isoformat(),
+        "id": str(task_id),
+        "role": "system",
+        "parts": [{
+            "kind": "text",
+            "text": f"V3 Internal Event: {v3_type} - {v3_data}"
+        }]
+    }
