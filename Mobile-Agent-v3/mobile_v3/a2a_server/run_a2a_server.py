@@ -95,9 +95,21 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
 
     screenshot_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'data' and p.get('contentType') == 'image/png'), None)
     if not screenshot_part:
-        raise HTTPException(status_code=400, detail="A2A Message missing 'image/png' part for initial screenshot.")
-    initial_screenshot_b64 = screenshot_part['data']
+        error_detail = "A2A Message missing 'image/png' part for initial screenshot."
+        logger.error(f"STREAM START FAILED: {error_detail}") 
+        raise HTTPException(status_code=400, detail=error_detail)
+    
+    try:
+        initial_screenshot_b64 = screenshot_part['file']['bytes']
+    except KeyError:
+        error_detail = "A2A Message FilePart is malformed (missing 'file' or 'bytes' field)."
+        logger.error(f"STREAM START FAILED: {error_detail}") 
+        raise HTTPException(status_code=400, detail=error_detail)
 
+    mimetype = screenshot_part['file'].get('mimeType') 
+    if mimetype != 'image/png' and not mimetype.startswith('image/'):
+        logger.warn(f"Received unexpected MIME type: {mimetype}")
+        
     # 2. 初始化 V3 任务
     TASK_COUNTER += 1
     l1_task_id = TASK_COUNTER
