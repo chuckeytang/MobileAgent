@@ -24,21 +24,26 @@ from ..utils.call_mobile_agent_e import GUIOwlWrapper
 from .a2a_utils import setup_task_logger, create_action_request_event, create_a2a_event
 
 def clean_base64(b64_string: str) -> str:
-    """彻底清除 Base64 字符串中的所有空格、换行符和潜在的 Data URL 前缀。"""
+    """彻底清除 Base64 字符串中的所有非法字符，包括头部和尾部的非编码字符。"""
     
-    # 1. 移除所有空白字符和换行符
+    # 1. 移除所有空白字符 (包括 \n, \r, 空格)
     cleaned = re.sub(r'\s', '', b64_string).strip()
     
-    # 2. 移除常见的 Data URL 前缀，以防 Node.js 侧没有移除
-    if cleaned.startswith("data:image"):
-        # 查找逗号后的部分 (data:image/png;base64, [data])
-        if ',' in cleaned:
-            cleaned = cleaned.split(',', 1)[1]
-            
-    # 3. 移除 Python VLLM 抱怨的 None 字符串 (如果 Node.js 侧返回了 None)
-    if cleaned.upper() == 'NONE':
-        return "" 
-        
+    # 2. 移除常见的 Data URL 前缀（防止Node.js侧忘记）
+    # Data URL 格式: data:[<MIME-type>][;charset=<encoding>][;base64],<data>
+    if ',' in cleaned:
+        cleaned = cleaned.split(',', 1)[1]
+    
+    # 3. 移除任何非 Base64 字符 (A-Z, a-z, 0-9, +, /, =)
+    # 这一步是关键，它会移除像 \u0000 这样的隐藏字符
+    valid_chars = set('ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=')
+    cleaned = ''.join(c for c in cleaned if c in valid_chars)
+    
+    # 4. 确保 Base64 长度是 4 的倍数（填充）
+    # Base64 编码必须以 '=' 填充到 4 的倍数。
+    # Python 的 b64decode 要求这一步，但如果 VLLM 内部已经做了，我们可能不需要。
+    # ❗ 暂时跳过填充，交给 VLLM 内部处理，专注于清理非法字符 ❗
+    
     return cleaned
 
 # ---------------------------------------------------------------------
@@ -239,7 +244,8 @@ class MobileAgentTaskExecutor:
         
         # 初始状态
         current_screenshot_b64 = clean_base64(initial_screenshot_b64)
-        
+        task_logger.error(f"DEBUG: VLM INPUT B64 (FULL): {current_screenshot_b64}")
+
         for step in range(max_step):
             task_logger.info(f"\n--- STEP {step+1} ---")
             
