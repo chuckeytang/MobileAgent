@@ -322,7 +322,7 @@ async def test_real_complex_task_async_stream():
     l1_task_coro = executor.execute_task_a2a_mode(
         task_id=TASK_ID,
         instruction=INSTRUCTION,
-        initial_screenshot_b64=a2a_mock.get_b64_from_mock(1), 
+        initial_screenshot_b64=get_b64_from_mock(1), 
         event_queue=fake_l2_client.event_queue, # 关键：将队列传入 L1 Agent
         api_key=REAL_VLM_API_KEY, base_url=REAL_VLM_BASE_URL, model=REAL_VLM_MODEL,
         if_notetaker=True, 
