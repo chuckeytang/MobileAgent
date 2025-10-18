@@ -24,10 +24,22 @@ from ..utils.call_mobile_agent_e import GUIOwlWrapper
 from .a2a_utils import setup_task_logger, create_action_request_event, create_a2a_event
 
 def clean_base64(b64_string: str) -> str:
-    """去除 Base64 字符串中的所有空格、换行符和非法字符，以便 VLLM 正确解码。"""
-    # 移除所有空白字符 (空格, 换行, 制表符等)
-    # 使用 re.sub 更加健壮
-    return re.sub(r'\s', '', b64_string).strip()
+    """彻底清除 Base64 字符串中的所有空格、换行符和潜在的 Data URL 前缀。"""
+    
+    # 1. 移除所有空白字符和换行符
+    cleaned = re.sub(r'\s', '', b64_string).strip()
+    
+    # 2. 移除常见的 Data URL 前缀，以防 Node.js 侧没有移除
+    if cleaned.startswith("data:image"):
+        # 查找逗号后的部分 (data:image/png;base64, [data])
+        if ',' in cleaned:
+            cleaned = cleaned.split(',', 1)[1]
+            
+    # 3. 移除 Python VLLM 抱怨的 None 字符串 (如果 Node.js 侧返回了 None)
+    if cleaned.upper() == 'NONE':
+        return "" 
+        
+    return cleaned
 
 # ---------------------------------------------------------------------
 # 1. 异步任务回复管理器 (用于解除 L1 任务的阻塞)
