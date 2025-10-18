@@ -3,6 +3,8 @@
 import json
 import asyncio
 import logging
+import os
+import sys
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -152,3 +154,24 @@ async def receive_action_reply(l1_task_id: int, request: Request):
     else:
         logger.warn(f"Reply received for Task {l1_task_id}, but the task has already continued.")
         return {"status": "warning", "message": "Task already processed or cancelled."}
+    
+try:
+    import uvicorn
+except ImportError:
+    logger.error("Uvicorn is not installed. Please install with: pip install uvicorn")
+    sys.exit(1)
+
+if __name__ == "__main__":
+    VLM_API_KEY = os.environ.get("VLM_API_KEY", "") 
+    VLM_BASE_URL = os.environ.get("VLM_BASE_URL", "http://localhost:6006/v1")
+    VLM_MODEL = os.environ.get("VLM_MODEL", "iic/GUI-Owl-7B")
+    
+    logger.info("Starting Mobile-Agent-v3 A2A Server...")
+    
+    # Uvicorn 运行应用
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=4001, 
+        log_level="info"
+    )
