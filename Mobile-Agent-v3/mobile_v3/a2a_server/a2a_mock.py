@@ -8,6 +8,8 @@ import os
 from PIL import Image
 import asyncio
 from typing import Dict, Any, List, Optional, Tuple
+
+from fastapi import logger
 from mobile_v3.a2a_server.mobile_agent_a2a import A2AInterfaceBase 
 from mobile_v3.a2a_server.mobile_agent_a2a import ACTION_REPLY_FUTURES
 
@@ -60,8 +62,9 @@ class A2AEventSink:
     模拟 L2 Node.js 客户端的事件接收器和回复器。
     它接收 L1 Agent 的事件流 (通过 Queue)，并处理其中的动作请求。
     """
-    def __init__(self, task_id: int, mock_reply_script: List[Dict[str, Any]]):
+    def __init__(self, task_id: int, logger: logging.Logger, mock_reply_script: List[Dict[str, Any]]):
         self.task_id = task_id
+        self.logger = logger
         self.mock_reply_script = mock_reply_script
         self.reply_counter = 0
         self.received_events: List[Dict[str, Any]] = []
