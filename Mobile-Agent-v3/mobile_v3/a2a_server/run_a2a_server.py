@@ -21,7 +21,7 @@ logger = logging.getLogger('A2AServer')
 
 # 任务 ID 计数器和任务状态存储
 TASK_COUNTER = 1000
-ACTIVE_TASK_CONTEXTS = {} # 存储 {l1_task_id: {executor: MobileAgentTaskExecutor, task_future: Future}}
+ACTIVE_TASK_CONTEXTS = {}
 ACTION_REPLY_FUTURES = {}
 # 获取或创建 Future
 def get_reply_future(task_id):
@@ -42,58 +42,48 @@ async def health_check():
     return {"status": "ok", "agent": "MobileAgent-V3-A2A"}
 
 
-@app.post("/v1/messages:sendStream")
-async def send_stream(request: Request):
+# -------------------- SSE 流式处理核心逻辑 --------------------
+
+async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
     """
-    A2A 协议的核心流式通信端点。
-    接收 A2A Message，启动 V3 任务，并通过 SSE 推送 V3 Agent 的实时事件。
+    接收并处理 A2A Message，启动 V3 任务，并通过 SSE 推送 V3 Agent 的实时事件。
+    这是原 send_stream 函数的逻辑主体。
     """
     global TASK_COUNTER
+    
+    # 1. 提取参数
+    instruction_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'text'), None)
+    if not instruction_part:
+        raise HTTPException(status_code=400, detail="A2A Message missing 'text' part for instruction.")
+    instruction = instruction_part['text']
 
-    try:
-        # 1. 解析传入的标准 A2A Message
-        # ❗ 注意：A2A Client 发送的消息体是 JSON 格式的 Message 对象
-        a2a_message = await request.json()
-        
-        # 提取用户指令（假设 text/plain 在 parts[0]）
-        instruction_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'text'), None)
-        if not instruction_part:
-            raise HTTPException(status_code=400, detail="A2A Message missing 'text' part for instruction.")
-        instruction = instruction_part['text']
-
-        # 提取初始截图（假设 image/png 在 parts[1]）
-        screenshot_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'data' and p.get('contentType') == 'image/png'), None)
-        if not screenshot_part:
-            # ❗ 必须要求 A2A Client 在发起任务时提供初始截图 ❗
-            raise HTTPException(status_code=400, detail="A2A Message missing 'image/png' part for initial screenshot.")
-        initial_screenshot_b64 = screenshot_part['data'] 
-
-    except Exception as e:
-        logger.error(f"Failed to parse A2A Message: {e}")
-        raise HTTPException(status_code=400, detail=f"Invalid A2A Message format: {e}")
+    screenshot_part = next((p for p in a2a_message.get('parts', []) if p.get('kind') == 'data' and p.get('contentType') == 'image/png'), None)
+    if not screenshot_part:
+        raise HTTPException(status_code=400, detail="A2A Message missing 'image/png' part for initial screenshot.")
+    initial_screenshot_b64 = screenshot_part['data']
 
     # 2. 初始化 V3 任务
     TASK_COUNTER += 1
     l1_task_id = TASK_COUNTER
     
-    # ❗ 这里的 executor 需要重新初始化，以适配 A2A 的异步/非阻塞模型 ❗
-    # 假设 MobileAgentTaskExecutor 可以被重用或以某种方式初始化
-    # executor = MobileAgentTaskExecutor(API_KEY, BASE_URL, MODEL) 
-    # 简化：使用一个全局或配置的 Executor
-    
-    # 3. 启动 V3 任务并返回 SSE 响应
+    # 获取 VLM 配置 (必须在全局或通过依赖注入获取)
+    vlm_api_key = os.environ.get("VLM_API_KEY", "") 
+    vlm_base_url = os.environ.get("VLM_BASE_URL", "http://localhost:6001/v1")
+    vlm_model = os.environ.get("VLM_MODEL", "iic/GUI-Owl-7B")
+
     async def event_generator():
-        # 队列用于接收 MobileAgentTaskExecutor 推送的 V3 内部事件
         event_queue = asyncio.Queue()
         
-        # 启动 Mobile Agent V3 任务（现在必须是非阻塞的）
-        # ❗ execute_task 方法需要被修改，它不再阻塞，而是将事件推送到 event_queue ❗
+        # 启动 Mobile Agent V3 任务（异步执行）
         task_future = asyncio.ensure_future(
             MobileAgentTaskExecutor.execute_task_a2a_mode(
                 l1_task_id, 
                 instruction, 
                 initial_screenshot_b64, 
-                event_queue, # 传入队列以接收事件
+                event_queue,
+                api_key=vlm_api_key, 
+                base_url=vlm_base_url, 
+                model=vlm_model,
             )
         )
         
@@ -104,17 +94,12 @@ async def send_stream(request: Request):
             yield create_a2a_status_update(l1_task_id, 'running')
             
             while True:
-                # 阻塞等待 V3 内部事件
                 v3_event = await event_queue.get()
-                
-                # 4. 转换 V3 内部事件为 A2A 标准事件
                 a2a_event = V3_to_A2A_Event(l1_task_id, v3_event)
                 
-                # 5. 推送 A2A 事件给客户端
                 if a2a_event:
                     yield create_a2a_message_stream_event(a2a_event)
 
-                # 任务完成或失败，退出循环
                 if a2a_event.get('kind') == 'status-update' and a2a_event['data'].get('final'):
                     break
 
@@ -122,15 +107,45 @@ async def send_stream(request: Request):
             logger.warn(f"Task {l1_task_id} stream cancelled by client.")
         except Exception as e:
             logger.error(f"Error during A2A task stream for {l1_task_id}: {e}")
-            # 推送失败状态
             yield create_a2a_status_update(l1_task_id, 'failed', final=True, error=str(e))
         finally:
-            # 清理
             task_future.cancel()
             ACTIVE_TASK_CONTEXTS.pop(l1_task_id, None)
 
-    # 返回 SSE 响应 (text/event-stream)
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.post("/")
+async def handle_a2a_rpc_root(request: Request):
+    """
+    捕获 Node.js SDK 发送到顶级 URL 的 RPC 请求，并根据 method 字段进行分发。
+    """
+    try:
+        rpc_request = await request.json()
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON format.")
+    
+    method = rpc_request.get("method")
+    
+    # 检查是否是流式消息发送请求
+    if method == "message/stream":
+        params = rpc_request.get("params")
+        if not params or not params.get("message"):
+            raise HTTPException(status_code=400, detail="Missing A2A Message in RPC params.")
+            
+        a2a_message = params.get("message")
+        
+        # ❗ 调用流式处理核心逻辑 ❗
+        return await _handle_stream_logic(a2a_message)
+
+    # 检查是否是 tasks/cancel 请求
+    if method == "tasks/cancel":
+        params = rpc_request.get("params")
+        task_id = params.get("id")
+        # 您需要在这里实现任务取消逻辑
+        logger.info(f"Received tasks/cancel request for Task {task_id}")
+        return JSONResponse({"jsonrpc": "2.0", "result": {"id": task_id, "status": "canceled"}, "id": rpc_request.get("id")})
+        
+    raise HTTPException(status_code=405, detail=f"RPC Method '{method}' not supported.")
 
 @app.post("/v1/tasks/{l1_task_id}:reply")
 async def receive_action_reply(l1_task_id: int, request: Request):
