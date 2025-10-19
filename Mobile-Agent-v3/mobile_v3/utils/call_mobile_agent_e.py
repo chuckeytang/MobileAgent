@@ -1,4 +1,5 @@
 import abc
+import asyncio
 import time
 import base64
 import numpy as np
@@ -111,27 +112,29 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
         return self.predict_mm(text_prompt, [])
 
     async def predict_mm(
-            self, text_prompt: str, images: list[np.ndarray], messages = None
+            self, text_prompt: str, images: list[str], messages = None
     ) -> tuple[str, Optional[bool], Any]:
-        
-        if messages is None:
-          payload = [
-              {
-                  "role": "user",
-                  "content": [
-                      {"text": text_prompt},
-                  ]
-              }
-          ]
-          
-          for image_b64 in images: # 遍历 Base64 字符串
-            payload[0]['content'].append({
-                'image': image_b64 # 传递 Base64 字符串
+        # 1. 构造 content 列表
+        content_parts = [
+            {"type": "text", "text": text_prompt}
+        ]
+
+        for image_b64 in images:
+            # 🚨 确保 Base64 带有前缀，并使用标准的 type/image_url 结构
+            image_url = ensure_b64_url_format(image_b64)
+            content_parts.append({
+                "type": "image_url",
+                "image_url": {
+                    "url": image_url
+                }
             })
-        else:
-          payload = messages
             
-        payload = self.convert_messages_format_to_openaiurl(payload)
+        payload = [
+            {
+                "role": "user",
+                "content": content_parts
+            }
+        ]
 
         counter = self.max_retry
         wait_seconds = self.RETRY_WAITING_SECONDS
@@ -140,7 +143,7 @@ class GUIOwlWrapper(LlmWrapper, MultimodalLlmWrapper):
               chat_completion_from_url = self.bot.chat.completions.create(model=self.model, messages=payload, **{})
               return (chat_completion_from_url.choices[0].message.content, payload, chat_completion_from_url)
             except Exception as e:
-                time.sleep(wait_seconds)
+                await asyncio.sleep(wait_seconds)
                 wait_seconds *= 1
                 counter -= 1
                 print('Error calling LLM, will retry soon...')
