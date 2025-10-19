@@ -46,7 +46,7 @@ class DebugLogMiddleware(BaseHTTPMiddleware):
                 # 解析并打印 Payload
                 payload = json.loads(request.state.body)
                 logger.info(f"[DEBUG LOG] POST Payload Peek: {payload.get('method')}")
-                logger.debug(f"[DEBUG LOG] Full Payload: {json.dumps(payload, indent=2)}")
+                # logger.debug(f"[DEBUG LOG] Full Payload: {json.dumps(payload, indent=2)}")
                 
                 # 将 body 副本放回流中，供 handle_a2a_rpc_root 再次读取
                 request.scope["body"] = request.state.body
