@@ -149,18 +149,31 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
             
             while True:
                 v3_event = await event_queue.get()
+                logger.debug(f"Task {l1_task_id} [event_generator] received v3_event: {v3_event}")
+                if not v3_event or not isinstance(v3_event, dict):
+                    logger.warn(f"Task {l1_task_id} [event_generator] received an invalid/empty event. Skipping.")
+                    continue
+
                 a2a_event = V3_to_A2A_Event(l1_task_id, v3_event)
+                logger.debug(f"Task {l1_task_id} [event_generator] converted to a2a_event: {a2a_event}")
                 
                 if a2a_event:
+                    # (a) 发送事件
                     yield create_a2a_message_stream_event(a2a_event)
 
-                if a2a_event.get('kind') == 'status-update' and a2a_event.get('status', {}).get('final'):
-                    break
+                    # (b) 检查是否为终止事件 (合并到同一个 'if' 块中)
+                    if a2a_event.get('kind') == 'status-update' and a2a_event.get('status', {}).get('final'):
+                        logger.info(f"Task {l1_task_id} received final status event. Closing stream.")
+                        break
+                else:
+                    # 如果 V3_to_A2A_Event 返回了 None (例如，我们决定忽略某个事件)
+                    logger.warn(f"Task {l1_task_id} [event_generator] V3_to_A2A_Event returned None for {v3_event.get('type')}. Event ignored.")
 
         except asyncio.CancelledError:
             logger.warn(f"Task {l1_task_id} stream cancelled by client.")
         except Exception as e:
-            logger.error(f"Error during A2A task stream for {l1_task_id}: {e}")
+            logger.error(f"Error during A2A task stream for {l1_task_id}: {e}", exc_info=True)
+            logger.error(f"Failing v3_event was: {v3_event}")
             final_status_event = create_a2a_status_update(l1_task_id, 'failed', final=True, error=str(e))
             yield create_a2a_message_stream_event(final_status_event)
         finally:
