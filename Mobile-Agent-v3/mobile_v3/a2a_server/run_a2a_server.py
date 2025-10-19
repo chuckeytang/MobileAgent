@@ -69,7 +69,7 @@ class DebugLogMiddleware(BaseHTTPMiddleware):
         logger.info(f"[DEBUG LOG] REQUEST END: {response.status_code}")
         return response
 
-app.add_middleware(DebugLogMiddleware)
+# app.add_middleware(DebugLogMiddleware)
 
 # -------------------- A2A 标准端点 --------------------
 @app.get("/.well-known/agent-card.json")
