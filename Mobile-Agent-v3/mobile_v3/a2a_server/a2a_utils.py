@@ -81,15 +81,23 @@ def create_a2a_status_update(task_id: int, status: str, final: bool = False, err
         event["status"]["error"] = error
     return event
 
-def create_a2a_message_stream_event(a2a_event: Dict[str, Any]) -> str:
+def create_a2a_message_stream_event(a2a_event: Dict[str, Any], rpc_id: Any) -> str:
     """
     将 A2A 事件字典封装为 SSE (Server-Sent Events) 格式。
-    A2A 协议通常使用 'event' 字段包装 JSON 负载。
+    A2A 协议要求流式事件作为 JSON-RPC 2.0 响应的 'result' 字段。
     """
-    # 将事件字典转换为 JSON 字符串
-    json_data = json.dumps(a2a_event)
     
-    # 格式化为 SSE 消息 (data: [JSON])
+    # 1. 构建 JSON-RPC 响应体
+    rpc_response = {
+        "jsonrpc": "2.0",
+        "id": rpc_id,      # <-- 匹配 L2 Client 的请求 ID
+        "result": a2a_event # <-- A2A 事件本身 (e.g., status-update)
+    }
+
+    # 2. 将响应体转换为 JSON 字符串
+    json_data = json.dumps(rpc_response)
+    
+    # 3. 格式化为 SSE 消息 (data: [JSON])
     return f"data: {json_data}\n\n"
 
 def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
