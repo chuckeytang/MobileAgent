@@ -55,7 +55,7 @@ ACTION_REPLY_FUTURES: Dict[int, asyncio.Future] = {}
 def get_action_reply_future(task_id: int) -> asyncio.Future:
     """
     获取或创建用于接收 L2 动作回复的 Future。
-    外部 A2A Server 接口（如 /v1/tasks/{task_id}:reply）将调用 set_result 来解除阻塞。
+    外部 A2A Server 接口（如 /v1/tasks/{task_id}/reply）将调用 set_result 来解除阻塞。
     """
     if task_id not in ACTION_REPLY_FUTURES or ACTION_REPLY_FUTURES[task_id].done():
         ACTION_REPLY_FUTURES[task_id] = asyncio.Future()

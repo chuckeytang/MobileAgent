@@ -235,7 +235,7 @@ async def handle_a2a_rpc_root(request: Request):
     raise HTTPException(status_code=405, detail=f"RPC Method '{method}' not supported.")
 
 @app.post("/v1/tasks/{l1_task_id}/reply")
-async def receive_action_reply(l1_task_id: int, request: Request):
+async def receive_action_reply(l1_task_id: str, request: Request):
     """
     接收来自 L2 Client 的动作执行结果和新截图，解除 L1 Server 内部 Agent 的阻塞。
     """
