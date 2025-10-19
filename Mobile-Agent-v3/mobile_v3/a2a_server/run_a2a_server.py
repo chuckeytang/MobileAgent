@@ -240,21 +240,28 @@ async def receive_action_reply(l1_task_id: int, request: Request):
     接收来自 L2 Client 的动作执行结果和新截图，解除 L1 Server 内部 Agent 的阻塞。
     """
     try:
+        task_id = int(l1_task_id)
+    except ValueError:
+        logger.error(f"Received invalid task ID in URL: {l1_task_id}")
+        raise HTTPException(status_code=400, detail="Invalid task ID format. Must be an integer.")
+    
+    try:
         reply_data = await request.json()
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON format.")
     
-    if l1_task_id not in ACTION_REPLY_FUTURES:
-        raise HTTPException(status_code=404, detail=f"Task {l1_task_id} not found or not awaiting reply.")
+    if task_id not in ACTION_REPLY_FUTURES:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found or not awaiting reply.")
     
-    future = ACTION_REPLY_FUTURES.pop(l1_task_id) # 移除 Future
+    future = ACTION_REPLY_FUTURES.pop(task_id) # 移除 Future
     
     if not future.done():
         # 将 L2 传来的数据 (截图等) 传递给等待中的 L1 Agent
         future.set_result(reply_data) 
+        logger.info(f"Reply received for Task {task_id}, task continued.")
         return {"status": "ok", "message": "Reply received and task continued."}
     else:
-        logger.warn(f"Reply received for Task {l1_task_id}, but the task has already continued.")
+        logger.warn(f"Reply received for Task {task_id}, but the task has already continued.")
         return {"status": "warning", "message": "Task already processed or cancelled."}
     
 try:
