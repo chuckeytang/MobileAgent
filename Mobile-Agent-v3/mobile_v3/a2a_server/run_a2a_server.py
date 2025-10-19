@@ -17,19 +17,16 @@ from .mobile_agent_a2a import MobileAgentTaskExecutor # 待修改
 # 导入 A2A 协议辅助函数（需要自行实现，例如：将 V3 事件转换为 A2A 事件）
 from .a2a_utils import V3_to_A2A_Event, create_a2a_message_stream_event, create_a2a_status_update
 
+from .a2a_state import (
+    TASK_COUNTER, 
+    ACTIVE_TASK_CONTEXTS, 
+    ACTION_REPLY_FUTURES,
+    get_action_reply_future 
+)
+
 app = FastAPI(title="Mobile-Agent-v3 A2A Server")
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('A2AServer')
-
-# 任务 ID 计数器和任务状态存储
-TASK_COUNTER = 1000
-ACTIVE_TASK_CONTEXTS = {}
-ACTION_REPLY_FUTURES = {}
-# 获取或创建 Future
-def get_reply_future(task_id):
-    if task_id not in ACTION_REPLY_FUTURES or ACTION_REPLY_FUTURES[task_id].done():
-        ACTION_REPLY_FUTURES[task_id] = asyncio.Future()
-    return ACTION_REPLY_FUTURES[task_id]
 
 class DebugLogMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -69,7 +66,7 @@ class DebugLogMiddleware(BaseHTTPMiddleware):
         logger.info(f"[DEBUG LOG] REQUEST END: {response.status_code}")
         return response
 
-# app.add_middleware(DebugLogMiddleware)
+app.add_middleware(DebugLogMiddleware)
 
 # -------------------- A2A 标准端点 --------------------
 @app.get("/.well-known/agent-card.json")
@@ -146,6 +143,7 @@ async def _handle_stream_logic(a2a_message: dict, rpc_id: Any) -> StreamingRespo
         )
         
         ACTIVE_TASK_CONTEXTS[l1_task_id] = {'queue': event_queue, 'future': task_future}
+        v3_event = None
 
         try:
             # 初始状态更新 (A2A 协议)
@@ -248,12 +246,14 @@ async def receive_action_reply(l1_task_id: str, request: Request):
     try:
         reply_data = await request.json()
     except Exception as e:
+        logger.error(f"Failed to parse JSON for reply: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON format.")
     
     if task_id not in ACTION_REPLY_FUTURES:
+        logger.error(f"Reply received for unknown task ID: {task_id}") 
         raise HTTPException(status_code=404, detail=f"Task {task_id} not found or not awaiting reply.")
     
-    future = ACTION_REPLY_FUTURES.pop(task_id) # 移除 Future
+    future = ACTION_REPLY_FUTURES.pop(task_id)
     
     if not future.done():
         # 将 L2 传来的数据 (截图等) 传递给等待中的 L1 Agent

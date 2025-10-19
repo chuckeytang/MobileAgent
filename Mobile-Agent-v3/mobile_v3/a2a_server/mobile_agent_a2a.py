@@ -47,19 +47,9 @@ def clean_base64(b64_string: str) -> str:
     return cleaned
 
 # ---------------------------------------------------------------------
-# 1. 异步任务回复管理器 (用于解除 L1 任务的阻塞)
+# 1. 从 a2a_state 导入共享状态
 # ---------------------------------------------------------------------
-# 全局字典，存储等待 L2 客户端回复的 Future 对象 {task_id: asyncio.Future}
-ACTION_REPLY_FUTURES: Dict[int, asyncio.Future] = {}
-
-def get_action_reply_future(task_id: int) -> asyncio.Future:
-    """
-    获取或创建用于接收 L2 动作回复的 Future。
-    外部 A2A Server 接口（如 /v1/tasks/{task_id}/reply）将调用 set_result 来解除阻塞。
-    """
-    if task_id not in ACTION_REPLY_FUTURES or ACTION_REPLY_FUTURES[task_id].done():
-        ACTION_REPLY_FUTURES[task_id] = asyncio.Future()
-    return ACTION_REPLY_FUTURES[task_id]
+from .a2a_state import ACTION_REPLY_FUTURES, get_action_reply_future
 
 # ---------------------------------------------------------------------
 # 2. 抽象 A2A 接口 (Mock/Real 的基类)
