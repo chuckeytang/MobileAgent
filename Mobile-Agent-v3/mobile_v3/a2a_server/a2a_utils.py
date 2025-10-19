@@ -97,7 +97,7 @@ def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
     将 Mobile Agent V3 的内部事件转换为 A2A 标准事件。
     """
     v3_type = v3_event.get('type')
-    v3_data = v3_event.get('data')
+    v3_data = v3_event.get('metadata')
 
     # 宏观的 Manager Plan 或 Reflector Outcome，映射为 A2A 消息或状态更新
     if v3_type == 'manager_plan':
