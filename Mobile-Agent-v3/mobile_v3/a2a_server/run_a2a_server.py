@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import sys
+from typing import Any
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -80,7 +81,7 @@ async def health_check():
 
 # -------------------- SSE 流式处理核心逻辑 --------------------
 
-async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
+async def _handle_stream_logic(a2a_message: dict, rpc_id: Any) -> StreamingResponse:
     """
     接收并处理 A2A Message，启动 V3 任务，并通过 SSE 推送 V3 Agent 的实时事件。
     这是原 send_stream 函数的逻辑主体。
@@ -145,7 +146,7 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
         try:
             # 初始状态更新 (A2A 协议)
             initial_status_event = create_a2a_status_update(l1_task_id, 'running')
-            yield create_a2a_message_stream_event(initial_status_event)
+            yield create_a2a_message_stream_event(initial_status_event, rpc_id)
             
             while True:
                 v3_event = await event_queue.get()
@@ -159,7 +160,7 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
                 
                 if a2a_event:
                     # (a) 发送事件
-                    yield create_a2a_message_stream_event(a2a_event)
+                    yield create_a2a_message_stream_event(a2a_event, rpc_id)
 
                     # (b) 检查是否为终止事件 (合并到同一个 'if' 块中)
                     if a2a_event.get('kind') == 'status-update' and a2a_event.get('status', {}).get('final'):
@@ -175,7 +176,7 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
             logger.error(f"Error during A2A task stream for {l1_task_id}: {e}", exc_info=True)
             logger.error(f"Failing v3_event was: {v3_event}")
             final_status_event = create_a2a_status_update(l1_task_id, 'failed', final=True, error=str(e))
-            yield create_a2a_message_stream_event(final_status_event)
+            yield create_a2a_message_stream_event(final_status_event, rpc_id)
         finally:
             task_future.cancel()
             ACTIVE_TASK_CONTEXTS.pop(l1_task_id, None)
@@ -200,7 +201,8 @@ async def handle_a2a_rpc_root(request: Request):
         raise HTTPException(status_code=400, detail="Invalid JSON format.")
     
     method = rpc_request.get("method")
-    logger.info(f"RPC Method: {method}, Request ID: {rpc_request.get('id')}")
+    rpc_id = rpc_request.get("id")
+    logger.info(f"RPC Method: {method}, Request ID: {rpc_id}")
     logger.debug(f"Full RPC Payload: {json.dumps(rpc_request, indent=2)}")
     
     # 检查是否是流式消息发送请求
@@ -216,7 +218,7 @@ async def handle_a2a_rpc_root(request: Request):
             logger.error("RPC Payload 'params' is missing the 'message' field.")
             raise HTTPException(status_code=400, detail="RPC Payload is missing 'message' field in params.")
         
-        return await _handle_stream_logic(a2a_message)
+        return await _handle_stream_logic(a2a_message, rpc_id)
 
     # 检查是否是 tasks/cancel 请求
     if method == "tasks/cancel":
