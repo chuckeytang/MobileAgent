@@ -338,11 +338,11 @@ class MobileAgentTaskExecutor:
                 break
 
             # 3. 更新执行后的环境状态
+            screenshot_before_b64 = current_screenshot_b64
             screenshot_after_b64 = reply["screenshot_b64"]
             cleaned_screenshot_after_b64 = clean_base64(screenshot_after_b64)
             current_width = reply["screenshot_width"]
             current_height = reply["screenshot_height"]
-            current_screenshot_b64 = cleaned_screenshot_after_b64
             
             # -----------------------------------------------------
             # IV/V. 反思 (Reflector) 和 记忆 (Notetaker)
@@ -356,7 +356,7 @@ class MobileAgentTaskExecutor:
 
             output_action_reflect, _, _ = await self.vllm.predict_mm(
                 prompt_action_reflect,
-                [current_screenshot_b64, cleaned_screenshot_after_b64], # 动作前后两张截图
+                [screenshot_before_b64, cleaned_screenshot_after_b64], # 动作前后两张截图
             )
             
             parsed_result_action_reflect = action_reflector.parse_response(output_action_reflect)

@@ -154,14 +154,15 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
                 if a2a_event:
                     yield create_a2a_message_stream_event(a2a_event)
 
-                if a2a_event.get('kind') == 'status-update' and a2a_event['data'].get('final'):
+                if a2a_event.get('kind') == 'status-update' and a2a_event.get('status', {}).get('final'):
                     break
 
         except asyncio.CancelledError:
             logger.warn(f"Task {l1_task_id} stream cancelled by client.")
         except Exception as e:
             logger.error(f"Error during A2A task stream for {l1_task_id}: {e}")
-            yield create_a2a_status_update(l1_task_id, 'failed', final=True, error=str(e))
+            final_status_event = create_a2a_status_update(l1_task_id, 'failed', final=True, error=str(e))
+            yield create_a2a_message_stream_event(final_status_event)
         finally:
             task_future.cancel()
             ACTIVE_TASK_CONTEXTS.pop(l1_task_id, None)
