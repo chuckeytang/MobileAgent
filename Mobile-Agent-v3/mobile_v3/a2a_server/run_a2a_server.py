@@ -144,7 +144,8 @@ async def _handle_stream_logic(a2a_message: dict) -> StreamingResponse:
 
         try:
             # 初始状态更新 (A2A 协议)
-            yield create_a2a_status_update(l1_task_id, 'running')
+            initial_status_event = create_a2a_status_update(l1_task_id, 'running')
+            yield create_a2a_message_stream_event(initial_status_event)
             
             while True:
                 v3_event = await event_queue.get()

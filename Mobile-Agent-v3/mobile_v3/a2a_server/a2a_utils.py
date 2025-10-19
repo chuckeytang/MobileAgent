@@ -116,14 +116,11 @@ def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
     elif v3_type == 'action_request':
         # 动作请求，通常在 A2A 中也是一个 Message
         return {
-            "kind": "message",
+            "kind": "tool_call_request", # 建议使用自定义的 kind，更清晰
             "timestamp": datetime.now().isoformat(),
-            "id": str(task_id),
-            "role": "tool_call",
-            "parts": [{
-                "kind": "text",
-                "text": f"Action Requested: {v3_data}"
-            }]
+            "taskId": task_id,
+            # 将 L1 Agent 动作JSON和思考作为核心数据传递
+            "data": v3_data 
         }
 
     elif v3_type == 'task_finalized':
