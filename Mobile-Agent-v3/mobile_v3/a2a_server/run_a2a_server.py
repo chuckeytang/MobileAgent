@@ -43,17 +43,21 @@ class DebugLogMiddleware(BaseHTTPMiddleware):
                 # 重新封装一个 Body 副本，以供下游路由（handle_a2a_rpc_root）再次读取
                 # 这是一个标准的 Fast API 模式，用于在中间件中消费 Body
                 request.state.body = await request.body()
+                async def receive():
+                    return {"type": "http.request", "body": request.state.body, "more_body": False}
                 
-                # 解析并打印 Payload
-                payload = json.loads(request.state.body)
-                logger.info(f"[DEBUG LOG] POST Payload Peek: {payload.get('method')}")
-                # logger.debug(f"[DEBUG LOG] Full Payload: {json.dumps(payload, indent=2)}")
+                # 3. 将 request.scope 中的 receive 替换为我们的新函数
+                request.scope["receive"] = receive
                 
-                # 将 body 副本放回流中，供 handle_a2a_rpc_root 再次读取
-                request.scope["body"] = request.state.body
+                if request.state.body: # 确保 body 不为空
+                    payload = json.loads(request.state.body)
+                    # 尝试打印 'method' (用于 RPC) 或 'type' (用于 reply)
+                    peek_key = payload.get('method') or payload.get('type')
+                    logger.info(f"[DEBUG LOG] POST Payload Peek (method/type): {peek_key}")
+                else:
+                    logger.info("[DEBUG LOG] POST Payload Peek: Empty Body")
             except json.JSONDecodeError as e:
                 logger.error(f"[DEBUG LOG] JSON Decode Failed (Middleware). Body: {request.state.body.decode('utf-8')[:100]}...")
-                # ❗ 关键：如果解析失败，直接返回 400 错误，并附带详情 ❗
                 return JSONResponse(
                     status_code=400, 
                     content={"detail": "Invalid JSON-RPC Payload format.", "error": str(e)}
