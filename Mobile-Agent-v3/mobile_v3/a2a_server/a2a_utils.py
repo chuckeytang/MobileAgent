@@ -109,14 +109,15 @@ def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
 
     # 宏观的 Manager Plan 或 Reflector Outcome，映射为 A2A 消息或状态更新
     if v3_type == 'manager_plan':
-        # 映射为 A2A 的 'message' 或 'artifact-update'
+        # 必须作为 'kind: "message"' 和 'role: "agent"' 发送
         return {
             "kind": "message",
+            "messageId": str(uuid.uuid4()),
             "timestamp": datetime.now().isoformat(),
-            "id": str(task_id),
-            "role": "assistant",
+            "taskId": str(task_id), # A2A SDK 期望 taskId
+            "role": "agent",       # L1 Server 是 "agent"
             "parts": [{
-                "kind": "text",
+                "kind": "text", # 计划作为 TextPart 发送
                 "text": f"Manager Plan: {v3_data.get('plan', '')}"
             }]
         }
@@ -124,17 +125,40 @@ def V3_to_A2A_Event(task_id: int, v3_event: Dict[str, Any]) -> Dict[str, Any]:
     elif v3_type == 'action_request':
         # 动作请求，通常在 A2A 中也是一个 Message
         return {
-            "kind": "tool_call_request", # 建议使用自定义的 kind，更清晰
+            "kind": "message",
+            "messageId": str(uuid.uuid4()),
             "timestamp": datetime.now().isoformat(),
-            "taskId": task_id,
-            # 将 L1 Agent 动作JSON和思考作为核心数据传递
-            "data": v3_data 
+            "taskId": str(task_id),
+            "role": "agent",
+            
+            # 将 L1 Agent 动作JSON和思考作为 'parts' 数组传递
+            "parts": [
+                {
+                    "kind": "data", # ✅ 使用 DataPart 来封装 JSON 数据
+                    "data": v3_data # v3_data 包含 {thought, action_json, ...}
+                }
+            ]
         }
 
     elif v3_type == 'task_finalized':
         # 任务结束，映射为最终状态更新
         status = v3_data.get('status', 'completed')
-        return create_a2a_status_update(task_id, status, final=True)
+        error = v3_data.get('reason', None)
+        return create_a2a_status_update(task_id, status, final=True, error=error)
+    # --- 4. 其他 V3 事件 (如 'action_reflection', 'important_notes') ---
+    # 根据 A2A 规范，这些也应该是 Message 事件
+    elif v3_type == 'action_reflection' or v3_type == 'important_notes':
+        return {
+            "kind": "message",
+            "messageId": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "taskId": str(task_id),
+            "role": "agent", # 都是 Agent 产生的
+            "parts": [{
+                "kind": "text",
+                "text": f"V3 Internal Event ({v3_type}): {json.dumps(v3_data)}"
+            }]
+        }
     
     # 其他 V3 事件（如 'action_reflection', 'important_notes'）可以根据需要映射或忽略
 
